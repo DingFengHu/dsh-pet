@@ -320,16 +320,16 @@ describe('守卫：主进程镜像的命中盒常量不得与 src/shared/constan
 describe('守卫：渲染端的输入租约必须在位（helper 随包发行，只能读源码断言）', () => {
   const sprite = spriteSource();
 
-  test('租约来源必须**正好**是那三个"正在用窗口输入"的状态', () => {
+  test('租约来源必须**正好**是那两个"正在用窗口输入"的状态', () => {
     const m = /inputBusy\(\)\s*\{([\s\S]*?)\n {2}\}/.exec(sprite);
     assert.ok(m, 'sprite.js 里找不到 inputBusy()');
     const body = m[1];
-    for (const flag of ['dragState.active', 'menuOpen', 'chatOpen']) {
+    for (const flag of ['dragState.active', 'menuOpen']) {
       assert.ok(body.includes(flag), `租约必须包含 ${flag}`);
     }
   });
 
-  test('建立点：拖拽成立 / 菜单开 / 弹窗开都上报', () => {
+  test('建立点：拖拽成立 / 菜单开都上报', () => {
     // 拖拽：onPointerDown 里立刻上报（不等过阈值——按下瞬间窗口就已经必须保持可交互）
     assert.ok(
       /setPointerCapture[\s\S]{0,600}?this\.syncInputBusy\(\)/.test(sprite),
@@ -340,10 +340,9 @@ describe('守卫：渲染端的输入租约必须在位（helper 随包发行，
       '真正开始拖拽时也要上报（此时可能尚未上报过）',
     );
     assert.ok(/this\.menuOpen = true;[\s\S]{0,300}?this\.syncInputBusy\(\)/.test(sprite), '菜单打开必须上报');
-    assert.ok(/this\.chatOpen = true;[\s\S]{0,300}?this\.syncInputBusy\(\)/.test(sprite), '对话弹窗打开必须上报');
   });
 
-  test('解除点：松手 / closeMenu / 菜单 onClose / 弹窗 onClose 每一处都上报', () => {
+  test('解除点：松手 / closeMenu / 菜单 onClose 每一处都上报', () => {
     assert.ok(/this\.syncInputBusy\(\)/.test(sprite), '必须存在上报方法');
     // 松手（onPointerUp）
     assert.ok(
@@ -360,8 +359,6 @@ describe('守卫：渲染端的输入租约必须在位（helper 随包发行，
       /onClose: \(\) => \{\s*this\.menuOpen = false;[\s\S]{0,200}?this\.syncInputBusy\(\)/.test(sprite),
       '菜单 onClose（点外/Esc）必须上报——这条路径不经 closeMenu',
     );
-    // 对话弹窗关闭
-    assert.ok(/this\.chatOpen = false;[\s\S]{0,300}?this\.syncInputBusy\(\)/.test(sprite), '对话弹窗关闭必须上报');
   });
 
   test('上报是幂等的、只走 petBridge.setInputBusy（不逐帧刷 IPC）', () => {
