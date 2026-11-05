@@ -25,8 +25,6 @@ test(
         ...config.pets[0],
         size: 150,
         fixedEnabled: true,
-        balanceEnabled: false,
-        whisperEnabled: false,
         workStatusEnabled: false,
         display: 'desktop',
         position: { corner: 'top-left', marginX: 200, marginY: 0 },
@@ -169,57 +167,6 @@ test(
         await assertEventually(async () =>
           app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].testIgnoring),
         );
-      });
-
-      await t.test('chat input stays usable while its surrounding transparent area passes through', async () => {
-        await page.evaluate('sprites[0].showChatFromMenu()');
-        await page.waitForSelector('.dsh-pet-chat');
-        const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getContentBounds());
-        const chat = await page.locator('.dsh-pet-chat').boundingBox();
-        await app.evaluate(
-          ({ screen }, p) => {
-            screen.getCursorScreenPoint = () => p;
-          },
-          {
-            x: bounds.x + chat.x + chat.width / 2,
-            y: bounds.y + chat.y + chat.height / 2,
-          },
-        );
-        await assertEventually(async () =>
-          app.evaluate(({ BrowserWindow }) => !BrowserWindow.getAllWindows()[0].testIgnoring),
-        );
-        await page
-          .locator('.dsh-pet-chat-input')
-          .fill('测试输入：长文本增长后仍然可以点击聊天框，旁边的应用保持可点击。'.repeat(4));
-        const expanded = await page.locator('.dsh-pet-chat').boundingBox();
-        assert.ok(expanded.height > chat.height);
-        await app.evaluate(
-          ({ screen }, p) => {
-            screen.getCursorScreenPoint = () => p;
-          },
-          {
-            x: bounds.x + expanded.x + expanded.width / 2,
-            y: bounds.y + expanded.y + expanded.height - 5,
-          },
-        );
-        await assertEventually(async () =>
-          app.evaluate(({ BrowserWindow }) => !BrowserWindow.getAllWindows()[0].testIgnoring),
-        );
-        await app.evaluate(
-          ({ screen }, p) => {
-            screen.getCursorScreenPoint = () => p;
-          },
-          {
-            x: bounds.x + 2,
-            y: bounds.y + bounds.height - 2,
-          },
-        );
-        await assertEventually(async () =>
-          app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].testIgnoring),
-        );
-        assert.equal(await page.evaluate('sprites[0].chatOpen'), true);
-        await page.evaluate('sprites[0].chatClose()');
-        assert.equal(await page.evaluate('sprites[0].inputBusy()'), false);
       });
 
       await t.test('missing pointerup and switching apps release stuck dragging/menu input', async () => {

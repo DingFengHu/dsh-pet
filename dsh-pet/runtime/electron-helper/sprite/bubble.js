@@ -67,8 +67,7 @@ Object.assign(PetSprite.prototype, {
     const workOn = !!(this.workOn && this.workText);
     const whisperOn = !!(this.whisperOn && this.whisperView);
     const workTerminal = this.workState === 'success' || this.workState === 'error';
-    const slot =
-      workTerminal && workOn ? 'work' : whisperOn ? 'whisper' : workOn ? 'work' : 'none';
+    const slot = workTerminal && workOn ? 'work' : whisperOn ? 'whisper' : workOn ? 'work' : 'none';
     // 记住当前槽位：点击处理在 init.js，必须知道「现在显示的是哪一种气泡」才能分清翻页与跳会话。
     this.bubbleSlot = slot;
     // 配图两种形态二选一：url 用完整地址，image 按素材根拼表情包路径；样式/class 共用。

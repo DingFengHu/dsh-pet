@@ -243,8 +243,7 @@ export function createCardRuntime(rt: PetRuntime) {
       cfg: () => cfgRef.current,
       isDragging: () => drag.isActive(),
       ownAnim,
-      playByName: (anim, playbackId, keepFacing) =>
-        menuActions.run({ anim, label: anim }, playbackId, keepFacing),
+      playByName: (anim, playbackId, keepFacing) => menuActions.run({ anim, label: anim }, playbackId, keepFacing),
       posFollow: motion.posFollow,
       speak: (text, image, url, duration, anim) => liveRef.current.flow?.speak(text, image, url, duration, anim),
       stopMotion: motion.stopMove,

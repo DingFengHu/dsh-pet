@@ -64,12 +64,7 @@ describe('ShortcutsCard —— 快捷键卡', () => {
 
   test('标题与说明、以及全部行标签都在', () => {
     const text = texts(render()).join('\n');
-    for (const key of [
-      'shortcutGroupPet',
-      'shortcutGroupPetHint',
-      'shortcutRowTodo',
-      'shortcutRowDisplay',
-    ]) {
+    for (const key of ['shortcutGroupPet', 'shortcutGroupPetHint', 'shortcutRowTodo', 'shortcutRowDisplay']) {
       assert.ok(text.includes(key), key + ' 应该出现');
     }
   });

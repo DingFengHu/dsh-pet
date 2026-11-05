@@ -22,7 +22,6 @@ function input(overrides: Partial<BubbleSlotInput> = {}): BubbleSlotInput {
   };
 }
 
-
 describe('decideBubbleSlot —— 同一时刻只挂一个气泡', () => {
   test('都没有点亮：返回 none', () => {
     assert.equal(decideBubbleSlot(input()), 'none');
@@ -42,9 +41,7 @@ describe('decideBubbleSlot —— 同一时刻只挂一个气泡', () => {
   });
 
   test('说话压过非终态任务：优先级第二', () => {
-    const slot = decideBubbleSlot(
-      input({ whisperOn: true, whisperText: '在', workOn: true, workText: '干活中' }),
-    );
+    const slot = decideBubbleSlot(input({ whisperOn: true, whisperText: '在', workOn: true, workText: '干活中' }));
     assert.equal(slot, 'whisper');
   });
 

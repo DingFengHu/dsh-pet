@@ -12,14 +12,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  buildSaveBody,
-  loadConfig,
-  loadMeta,
-  saveConfig,
-  syncConfig,
-  type SaveFields,
-} from './http.ts';
+import { buildSaveBody, loadConfig, loadMeta, saveConfig, syncConfig, type SaveFields } from './http.ts';
 
 /** 一次请求的记录。 */
 interface Call {

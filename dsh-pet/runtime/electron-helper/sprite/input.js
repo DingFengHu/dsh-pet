@@ -238,12 +238,7 @@ Object.assign(PetSprite.prototype, {
   inputBusy() {
     // 可点的工作气泡（跳会话）同样是来源：它们长在窗口里、靠窗口级 click 触发，
     // 却悬在平时穿透的余量区，正需要借 busy + 控件矩形把它们圈出来。
-    return (
-      this.dragState.active ||
-      this.menuOpen ||
-      this.todoOpen ||
-      this.workClickable()
-    );
+    return this.dragState.active || this.menuOpen || this.todoOpen || this.workClickable();
   },
 
   /** 工作气泡此刻是否可点：它正占着气泡槽，且拿到了可跳转的会话。 */
@@ -268,9 +263,7 @@ Object.assign(PetSprite.prototype, {
     if (!window.petBridge || !window.petBridge.setInputRegions) return;
     const rects = [];
     // 控件矩形 = 主进程允许接收点击的区域，矩形外继续穿透。可点的余额气泡悬在余量区，不登记就点不到。
-    const controls = [
-      ...document.querySelectorAll('.dsh-pet-menu-column, .dsh-pet-todo, .pet-bubble.is-clickable'),
-    ];
+    const controls = [...document.querySelectorAll('.dsh-pet-menu-column, .dsh-pet-todo, .pet-bubble.is-clickable')];
     for (const el of this.inputRegionElements) {
       if (!controls.includes(el)) {
         this.inputRegionResize.unobserve(el);

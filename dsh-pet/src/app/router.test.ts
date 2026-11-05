@@ -6,10 +6,7 @@ import { createRequestSecurity } from '../standalone/request-security.ts';
 import { MAX_REQUEST_BYTES } from '../standalone/request-body.ts';
 import { startRouter } from './router.ts';
 
-async function start(
-  routes: RegisteredRoute[] = [],
-  log: (message: string) => void = () => {},
-) {
+async function start(routes: RegisteredRoute[] = [], log: (message: string) => void = () => {}) {
   const security = createRequestSecurity();
   const server = await startRouter(routes, {
     security,
@@ -164,4 +161,3 @@ test('app caps request bodies before plugins/settings and catches synchronous an
     await server.close();
   }
 });
-

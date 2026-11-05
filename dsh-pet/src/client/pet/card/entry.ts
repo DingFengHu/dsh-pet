@@ -154,9 +154,7 @@ export function createCardEntry(rt: CardEntryRuntime) {
       const more = buildMoreBranch(menuItemsRef.current);
       // 顺序与桌面端同一排法：待办 → 动作树 → 显示位置 / 回到初始位置。
       // 桌面专属的两项（打开软件、重载配置）在网页端没有对应动作，不出现。
-      const tools: MenuNode[] = [
-        { label: '待办事项', action: 'todo', hint: TODO_HOTKEY_HINT },
-      ];
+      const tools: MenuNode[] = [{ label: '待办事项', action: 'todo', hint: TODO_HOTKEY_HINT }];
       const tail: MenuNode[] = [
         // 显示位置子菜单与桌面端同一份；改成不含 web 的值后本宠物会从页面消失。
         displayMenuBranch(),

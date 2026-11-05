@@ -1008,5 +1008,4 @@ describe('文件宠物条目 —— 全局默认（用户层作基座）+ 种类
     });
     assert.equal(rec(out.pig.physics).petCollision, true, '非法覆盖 → 回退基座（= 用户层），不是内置默认');
   });
-
 });

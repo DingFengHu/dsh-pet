@@ -17,8 +17,7 @@ import { failResult, invalidJson, methodNotAllowed, okResult } from '../result.t
 const MAIN_ENTRY = 'main';
 
 /** 实例数组非法时的统一文案：saveUserConfig 只回 null，细节必须在这里讲清。 */
-const INVALID_PETS =
-  'pets 非法：必须是该种类的全部实例（至少 1 只），每只 id 唯一，size / display / position 齐全合法';
+const INVALID_PETS = 'pets 非法：必须是该种类的全部实例（至少 1 只），每只 id 唯一，size / display / position 齐全合法';
 
 /**
  * 找出与其它条目冲突的实例 id。

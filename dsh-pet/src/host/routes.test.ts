@@ -162,13 +162,7 @@ describe('/state —— 轮询统一状态', () => {
       sections: Record<string, { counter: number; data: unknown }>;
       pets: Record<string, unknown>;
     };
-    assert.deepEqual(Object.keys(body.sections).sort(), [
-      'config',
-      'focusSession',
-      'menu',
-      'notify',
-      'workStatus',
-    ]);
+    assert.deepEqual(Object.keys(body.sections).sort(), ['config', 'focusSession', 'menu', 'notify', 'workStatus']);
     assert.equal(body.sections.notify.counter, 0, '没人写过时 counter=0（前端首拉当基线）');
     assert.equal(body.sections.notify.data, null);
     assert.equal(body.sections.config.data, null, '配置变更信号也没人写过（counter=0 / data=null）');
@@ -558,16 +552,13 @@ describe('pet 必填 —— 缺省一律 pet-required（issue #122 第 1 条：�
       }
     }
   });
-
 });
 
 describe('surface 必填 —— 缺省/非法一律 bad-request，且短路在读盘之前（issue #122 第 1 条）', () => {
   // 与 pet 空串同一处境：surface 的参数级校验放在读配置之前，所以这一组在"配置不可达"的
   // 源码形态下照样能测——断言 reason 同时钉住了短路顺序（是 bad-request，不是 generate-error）。
   test('/lock POST：不给 surface / 非法值 → bad-request', async () => {
-    const cases: Array<[string, string, string | undefined]> = [
-      ['lock', 'POST', '{}'],
-    ];
+    const cases: Array<[string, string, string | undefined]> = [['lock', 'POST', '{}']];
     for (const [path, method, body] of cases) {
       for (const q of ['', '&surface=nope', '&surface=WEB', '&surface=']) {
         const r = await call(`/dsh-pet-7340/${path}?pet=main${q}`, method, body);

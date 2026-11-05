@@ -10,6 +10,7 @@ import { chromium } from 'playwright';
 import { rolldown } from 'rolldown';
 
 const pet = {
+  assetRoot: 'main',
   id: 'pet-1',
   name: 'Blue',
   size: 240,
@@ -20,8 +21,6 @@ const defaults = {
   main: {
     pets: [pet],
     notificationsEnabled: true,
-    whisperImageEnabled: false,
-    chatImageEnabled: false,
     confineToScreen: false,
     physics: {
       gravity: 2400,
@@ -30,24 +29,17 @@ const defaults = {
       throwPower: 1,
       ceilingBounce: false,
       petCollision: false,
+      hapticEnabled: true,
+      shakeThrow: true,
+      tiltGravity: true,
     },
-    whisperModel: { provider: '', model: '' },
-    chatModel: { provider: '', model: '' },
-    chatMemoryRounds: 5,
-    chatImageLimit: 10,
   },
 };
 const customized = {
   main: {
     ...defaults.main,
     notificationsEnabled: false,
-    whisperImageEnabled: true,
-    chatImageEnabled: true,
     confineToScreen: true,
-    chatMemoryRounds: 19,
-    chatImageLimit: 2,
-    whisperModel: { provider: 'test', model: 'model' },
-    chatModel: { provider: 'test', model: 'model' },
     physics: { ...defaults.main.physics, gravity: 1200, throwPower: 2, ceilingBounce: true, petCollision: true },
   },
 };
@@ -111,7 +103,7 @@ async function open(t, { get = customized, put, post, viewport = { width: 900, h
       });
     }
     return route.fulfill({
-      json: { providers: [{ id: 'test', name: 'Test', models: [{ id: 'model', name: 'Model' }] }] },
+      json: {},
     });
   });
   await page.goto(`${url}/?lang=${lang}`);
@@ -154,7 +146,7 @@ test('config save errors: write failures keep edits visible and allow a retry', 
 
 test('config save errors: validation failures explain the rejected configuration', async (t) => {
   const { page } = await open(t, {
-    put: (route) => route.fulfill({ status: 400, json: { error: 'invalid pet config' } }),
+    put: (route) => route.fulfill({ status: 400, json: { ok: false, reason: 'bad-request' } }),
   });
   await save(page);
   await page
@@ -178,7 +170,7 @@ test('config save errors: network failures display a save error and release the 
 
 test('config save errors: sync failures use the sync message', async (t) => {
   const { page } = await open(t, { post: (route) => route.fulfill({ status: 500, json: { error: 'write failed' } }) });
-  await page.getByRole('button', { name: 'Sync', exact: true }).click();
+  await page.getByRole('button', { name: 'Sync', exact: true }).first().click();
   await page.getByRole('button', { name: 'Sync', exact: true }).last().click();
   await page
     .getByText('Failed to sync config. Check the server connection and configuration directory write permissions.', {
@@ -200,7 +192,7 @@ test('pending config prevents editing and saving placeholder defaults', async (t
     },
   });
   try {
-    assert.equal(await page.getByRole('button', { name: 'Save', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Save', exact: true }).first().isDisabled(), true);
     assert.equal(await page.locator('input[type=text]').first().isDisabled(), true);
     assert.deepEqual(writes, []);
   } finally {
@@ -222,7 +214,7 @@ for (const failure of ['http', 'network', 'malformed', 'null']) {
               ),
     });
     await page.getByRole('alert').waitFor();
-    assert.equal(await page.getByRole('button', { name: 'Save', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Save', exact: true }).first().isDisabled(), true);
     assert.deepEqual(writes, []);
     fail = false;
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
@@ -235,8 +227,8 @@ for (const failure of ['http', 'network', 'malformed', 'null']) {
 test('Sync updates all controls so a subsequent Save preserves the restored defaults', async (t) => {
   const { page, writes } = await open(t);
   await save(page);
-  assert.equal(writes[0].chatMemoryRounds, 19);
-  await page.getByRole('button', { name: 'Sync', exact: true }).click();
+  assert.equal(writes[0].confineToScreen, true);
+  await page.getByRole('button', { name: 'Sync', exact: true }).first().click();
   await page.getByRole('button', { name: 'Sync', exact: true }).last().click();
   await save(page);
   assert.equal(writes.length, 2);
@@ -271,22 +263,3 @@ for (const lang of ['en', 'zh']) {
     });
   }
 }
-
-test('model picker remains anchored while the responsive settings panel is scrolled', async (t) => {
-  const { page, writes } = await open(t, { viewport: { width: 900, height: 700 } });
-  const trigger = page.locator('.dsh-pet-mp__trigger').first();
-  await trigger.click();
-  const panel = page.getByRole('menu');
-  await panel.waitFor();
-  for (const scrollY of [0, 120]) {
-    await page.evaluate((y) => window.scrollTo(0, y), scrollY);
-    await page.waitForFunction(() => {
-      const trigger = document.querySelector('.dsh-pet-mp__trigger').getBoundingClientRect();
-      const panel = document.querySelector('.dsh-pet-mp__panel').getBoundingClientRect();
-      return Math.abs(panel.left - trigger.left) < 2 && panel.top >= 0 && panel.bottom <= innerHeight;
-    });
-  }
-  await page.getByRole('menuitemradio', { name: 'Follow current conversation' }).click();
-  await save(page);
-  assert.deepEqual(writes[0].whisperModel, { provider: '', model: '' });
-});

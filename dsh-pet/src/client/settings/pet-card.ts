@@ -119,7 +119,6 @@ export function makePetCard(rt: SettingsRuntime): FunctionComponent<PetCardProps
             toggleCell('fixedEnabled', !!pet.fixedEnabled, busy, (v) => props.onChange({ fixedEnabled: v })),
           ],
         }),
-
       ],
     });
   };

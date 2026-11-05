@@ -38,11 +38,7 @@ test('capabilities are random, fragment-only, and process-bound', () => {
 
 test('encoded private routes still require a capability; invalid encodings fail explicitly', () => {
   const security = createRequestSecurity();
-  for (const path of [
-    '/%73hutdown',
-    '/standalone-ai/%73ettings',
-    '/standalone-ai/settings%3Fx=1',
-  ]) {
+  for (const path of ['/%73hutdown', '/standalone-ai/%73ettings', '/standalone-ai/settings%3Fx=1']) {
     for (const method of ['GET', 'HEAD']) {
       const res = response();
       assert.equal(security.authorize(request({}, path, method), res as unknown as ServerResponse), false);

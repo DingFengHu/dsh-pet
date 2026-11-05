@@ -169,4 +169,3 @@ export function syncUserConfigFromDefault(paths: ConfigPaths): void {
   mkdirSync(dirname(paths.userFile), { recursive: true });
   writeFileSync(paths.userFile, raw, 'utf8');
 }
-

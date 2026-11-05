@@ -40,22 +40,6 @@ const server = createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const pathname = decodeURIComponent(url.pathname);
 
-  if (pathname === '/dsh-pet-7340/balance') {
-    // 模拟 DeepSeek 余额：固定 11.06 元，按已用比例落在钱袋档位，便于对照余额动画。
-    sendJson(res, 200, {
-      ok: true,
-      provider: 'deepseek',
-      kind: 'deepseek',
-      data: { currency: 'CNY', total: '11.06', granted: '5.00', toppedUp: '10.00' },
-    });
-    return;
-  }
-
-  if (pathname === '/dsh-pet-7340/balance/trigger') {
-    sendJson(res, 200, { count: 0 });
-    return;
-  }
-
   // 成品配置：mock 环境无用户层与文件宠物，故只有 main 条目（等于内置默认，字段原样保留），
   // 消费端按成品配置的结构读取，不校验。
   if (pathname === '/dsh-pet-7340/config') {

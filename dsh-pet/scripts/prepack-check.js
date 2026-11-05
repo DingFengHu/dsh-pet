@@ -131,7 +131,7 @@ if (Array.isArray(pkg.files) && pkg.files.includes('assets/memes')) ok('files in
 else fail('package.json files must include assets/memes (meme images would not ship)');
 const memePngs = existsSync(memesDir) ? readdirSync(memesDir).filter((n) => n.endsWith('.png')) : [];
 if (memePngs.length > 0) ok(`meme images present (${memePngs.length} png)`);
-else fail('no png in assets/memes (whisper/chat 配图会整体失效)');
+else fail('no png in assets/memes (/say 按名配图会整体失效)');
 // memes 键 ↔ 图片文件对齐：缺图条目会被 host 静默剔除（设计如此，不阻断发布），
 // 但数字对不上值得发布前看一眼，故只提示
 try {
