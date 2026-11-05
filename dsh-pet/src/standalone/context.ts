@@ -8,11 +8,6 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { createLlmFacade, createOfflineLlm, type StandaloneModelService } from './llm-facade.ts';
-
-/** 独立模式下余额路由报出的未登记服务商 id。 */
-export const STANDALONE_PROVIDER = 'standalone';
-
 /** 独立模式的日志接口，与插件对 ctx.logger 的使用面一致。 */
 export interface StandaloneLogger {
   info(message: string): void;
@@ -39,8 +34,6 @@ export interface StandaloneContextOptions {
   logger: StandaloneLogger;
   /** 路由收集数组；服务与 apply 共用同一个数组。 */
   routes?: RegisteredRoute[];
-  /** 可选的 AI 服务，缺失时模型能力明确不可用。 */
-  ai?: StandaloneModelService;
   /** 给地址附加访问凭据的包装。 */
   authenticatedUrl?: (baseUrl: string) => string;
   /**
@@ -132,7 +125,7 @@ function createServiceRegistry(services: Map<string, unknown>, attrs: () => Reco
  * @returns 伪 ctx、路由列表、初始化失败记录与释放函数。
  */
 export function createStandaloneContext(options: StandaloneContextOptions): StandaloneContext {
-  const { logger, ai } = options;
+  const { logger } = options;
   const routes = options.routes ?? [];
   const failures: string[] = [];
   /** effect 释放函数，后注册先释放。 */
@@ -154,24 +147,8 @@ export function createStandaloneContext(options: StandaloneContextOptions): Stan
     logger,
     webServer,
     connection: { authenticatedUrl: options.authenticatedUrl ?? ((baseUrl: string): string => baseUrl) },
-    ...(ai
-      ? {
-          standaloneAi: {
-            isReady: () => ai.isReady(),
-            // 余额走独立模式自己的服务商与密钥：DSH 的 credential store 与账号服务在这里都不在场。
-            balanceAuth: () => ai.balanceAuth(),
-          },
-        }
-      : {}),
     // 托盘退出的能力开关：宿主路由只看这个字段在不在，停机实现由 cli.ts 提供。
     ...(options.shutdown ? { shutdownApp: options.shutdown } : {}),
-    commands: { register: (): (() => void) => () => {} },
-    agentDefaultModel: {
-      currentSelection: (): { provider: string; model: string } =>
-        ai?.currentSelection() ?? { provider: STANDALONE_PROVIDER, model: '' },
-    },
-    credentials: { resolve: async (): Promise<undefined> => undefined },
-    llm: ai ? createLlmFacade(ai) : createOfflineLlm(),
   };
 
   return {
@@ -181,7 +158,6 @@ export function createStandaloneContext(options: StandaloneContextOptions): Stan
     async dispose(): Promise<void> {
       if (disposed) return;
       disposed = true;
-      ai?.dispose();
       for (const dispose of disposers.splice(0).reverse()) {
         try {
           await dispose();

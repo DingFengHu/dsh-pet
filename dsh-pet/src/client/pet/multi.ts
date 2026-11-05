@@ -7,7 +7,6 @@
 import type { FunctionComponent, ReactNode } from 'react';
 import { petBridge } from '../settings/bridge.ts';
 import { flattenConfigPets, isWebVisible } from '../../shared/config.ts';
-import { decideBalanceNotice } from '../../shared/balance/index.ts';
 import { ROUTE_PATH } from '../../shared/constants.ts';
 import { readFocusSession } from '../../shared/focus-session.ts';
 import { readMenuItems } from '../../shared/menu.ts';
@@ -15,11 +14,9 @@ import {
   fetchState,
   flattenCounters,
   readAnim,
-  readBalance,
   readLock,
   readPosition,
   readSay,
-  readSleep,
   readThrow,
   readWorkStatus,
   resolveLeafPath,
@@ -27,7 +24,6 @@ import {
 } from '../../shared/state.ts';
 import { fontStackOf } from '../../shared/fonts.ts';
 import type { Pet } from '../../shared/types.ts';
-import type { BalanceState } from '../../shared/balance/index.ts';
 import type {
   LockState,
   PetFacing,
@@ -36,7 +32,6 @@ import type {
   PositionMode,
   SayCue,
   SectionLeafName,
-  SleepState,
   StateLeaf,
 } from '../../shared/state.ts';
 import type { MenuMoreItem } from '../../shared/menu.ts';
@@ -70,32 +65,6 @@ export function createPetMulti(
     const [ready, setReady] = useState(false);
     // 碰撞站场：每只 PetCard 注册槽位，纯 ref 同步，不触发重渲染。
     const arenaRef = useRef<{ slots: Record<string, PetCollisionSlot> }>({ slots: {} });
-    // 余额状态：容器统一拉取，PetCard 共享；两个 tick 分别驱动动画与文字说明。
-    const [balance, setBalance] = useState<BalanceState | null>(null);
-    const [balanceTick, setBalanceTick] = useState(0);
-    const [balanceNoticeTick, setBalanceNoticeTick] = useState(0);
-    // 本次余额是否由用户手动请求；手动请求无条件弹，开关只关自动。
-    const [balanceManual, setBalanceManual] = useState(false);
-    // 上次已提示的不可用原因，自动轮询只在原因变化时再弹。
-    const noticeKeyRef = useRef<string | null>(null);
-    // 余额结果统一入口；存 ref 是为了让 /state effect 的依赖保持 [ready]。
-    // explicit 表示本次是否手动触发。
-    const applyBalanceRef = useRef<(state: BalanceState, explicit: boolean) => void>(() => {});
-    applyBalanceRef.current = (state, explicit) => {
-      setBalance(state);
-      setBalanceManual(explicit); // 手动标记随本次数据一起下发，每次到达都覆盖。
-      if (state.ok) {
-        setBalanceTick((t) => t + 1); // 成功：播档位动画并弹余额气泡。
-        return;
-      }
-      const { show, key } = decideBalanceNotice(state, noticeKeyRef.current, explicit);
-      noticeKeyRef.current = key;
-      if (show) setBalanceNoticeTick((t) => t + 1); // 弹文字说明气泡（不播动画）
-      // 未登记服务商是配置事实，已由气泡说明；其余原因照旧显式报错。
-      if (state.reason !== 'unsupported') {
-        console.error('[dsh-pet] 余额查询失败 reason=' + state.reason + (state.message ? ' ' + state.message : ''));
-      }
-    };
     // 工作状态：容器统一轮询 sections.workStatus，快照与 tick 驱动各宠物播档位动画。
     const [workStatus, setWorkStatus] = useState<WorkStatusSnapshot | null>(null);
     const [workStatusTick, setWorkStatusTick] = useState(0);
@@ -187,9 +156,6 @@ export function createPetMulti(
     // 占用锁是状态而不是指令：PetCard 读它决定冻结，并按 expiresAt 自行解除。
     const [lockTick, setLockTick] = useState(0);
     const lockRef = useRef<Record<string, LockState>>({});
-    // 睡觉同样是状态：三段名字由宿主挑定，卡片据此播开始→循环→起来。
-    const [sleepTick, setSleepTick] = useState(0);
-    const sleepRef = useRef<Record<string, SleepState>>({});
     // 第三方菜单项只在打开右键菜单时读一次，不参与渲染。
     const menuItemsRef = useRef<MenuMoreItem[]>([]);
     /** 已处理过的跳会话时刻：首拉补跳与后续增量可能指向同一条信号，靠它只跳一次。 */
@@ -213,11 +179,6 @@ export function createPetMulti(
             // 叶子 data 只是信号，配置本体太大，不能塞进 /state。
             petBridge.reload();
             return;
-          case 'balance': {
-            const hit = readBalance(leaf);
-            if (hit) applyBalanceRef.current(hit.state, hit.manual);
-            return;
-          }
           case 'workStatus': {
             const snap = readWorkStatus(leaf);
             if (snap) {
@@ -288,14 +249,6 @@ export function createPetMulti(
             setLockTick((t) => t + 1);
             return;
           }
-          case 'sleep': {
-            // 睡觉也是状态：卡片按三段名字播「开始→循环→起来」，醒来后回随机链。
-            const hit = readSleep(leaf);
-            if (!hit) return;
-            sleepRef.current[petId] = hit;
-            setSleepTick((t) => t + 1);
-            return;
-          }
         }
       };
 
@@ -310,13 +263,6 @@ export function createPetMulti(
           // 菜单项是当前状态而不是事件，首拉也必须装上，否则刷新后第三方菜单会一直为空。
           menuItemsRef.current = readMenuItems(s.sections.menu?.data, 'web');
           setMenuItems(menuItemsRef.current);
-          // 睡觉同样是状态而不是事件：刷新页面时宿主仍记着它在睡，首拉必须补一次；
-          // 否则页面显示醒着，而宿主对「已在睡」不回写叶子，只能等宿主重启才恢复。
-          for (const [petId, entry] of Object.entries(s.pets)) {
-            const hit = entry?.sleep?.data == null ? null : readSleep(entry.sleep);
-            if (hit) sleepRef.current[petId] = hit;
-          }
-          setSleepTick((t) => t + 1);
           return;
         }
         for (const { path, leaf } of takeChanged(s, baseline)) {
@@ -352,10 +298,6 @@ export function createPetMulti(
           return h(Card, {
             key: p.id,
             cfg: p as RuntimePet,
-            balance,
-            balanceTick,
-            balanceNoticeTick,
-            balanceManual,
             workStatus: workOn ? workStatus : null,
             workStatusTick: workOn ? workStatusTick : 0,
             onFocusSession: jumpToSession,
@@ -369,8 +311,6 @@ export function createPetMulti(
             throwCueTick,
             lock: lockRef.current[p.id],
             lockTick,
-            sleep: sleepRef.current[p.id],
-            sleepTick,
             menuItemsRef,
             arena: arenaRef,
           });

@@ -5,7 +5,6 @@
  * 两端共用同一份；首拉只记基线不渲染，否则刷新页面会把旧气泡重放一遍。
  * @module dsh-pet/src/shared/state
  */
-import { toBalanceState, type BalanceState } from './balance/index.ts';
 import { toWorkStatus, type WorkStatusSnapshot } from './work-status.ts';
 import { ROUTE_PATH } from './constants.ts';
 
@@ -114,20 +113,20 @@ export function takeChanged(s: PollState, baseline: Record<string, number>): Sta
 }
 
 /** `sections.<名>` 里会被消费端分发的那几个叶子。 */
-export type SectionLeafName = 'config' | 'balance' | 'workStatus' | 'notify' | 'menu' | 'focusSession';
+export type SectionLeafName = 'config' | 'workStatus' | 'notify' | 'menu' | 'focusSession';
 
 /** `pets.<id>.<名>` 里会被消费端分发的那几个叶子。 */
-export type PetLeafName = 'say' | 'anim' | 'position' | 'throw' | 'lock' | 'sleep';
+export type PetLeafName = 'say' | 'anim' | 'position' | 'throw' | 'lock';
 
 /** 一次叶子分发的落点：分段叶子，或某只宠物的叶子。 */
 export type LeafTarget =
   { where: 'section'; name: SectionLeafName } | { where: 'pet'; name: PetLeafName; petId: string };
 
 /** 分段叶子名的全集；新增 section 叶子时与 {@link SectionLeafName} 一起改。 */
-const SECTION_LEAF_NAMES = ['config', 'balance', 'workStatus', 'notify', 'menu', 'focusSession'] as const;
+const SECTION_LEAF_NAMES = ['config', 'workStatus', 'notify', 'menu', 'focusSession'] as const;
 
 /** 宠物叶子名的全集；新增宠物叶子时与 {@link PetLeafName} 一起改。 */
-const PET_LEAF_NAMES = ['say', 'anim', 'position', 'throw', 'lock', 'sleep'] as const;
+const PET_LEAF_NAMES = ['say', 'anim', 'position', 'throw', 'lock'] as const;
 
 /** 把字符串收窄成分段叶子名。 */
 function isSectionLeafName(name: string): name is SectionLeafName {
@@ -157,16 +156,6 @@ export function resolveLeafPath(path: string): LeafTarget | null {
   if (dot <= 0) return null;
   const name = rest.slice(dot + 1);
   return isPetLeafName(name) ? { where: 'pet', name, petId: rest.slice(0, dot) } : null;
-}
-
-/** 类型收窄：余额叶子 → `{ state, manual }`。
- *  manual = 这次写入是手动触发的（/balance 命令、桌面「查看余额」菜单），由宿主在写入时标记，
- *  消费端据此决定余额不可用时要不要必弹文字说明。形状非法 → null，消费端跳过这一拍。 */
-export function readBalance(leaf: StateLeaf): { state: BalanceState; manual: boolean } | null {
-  const state = toBalanceState(leaf.data);
-  if (!state) return null;
-  const manual = (leaf.data as { manual?: unknown }).manual === true;
-  return { state, manual };
 }
 
 /** 说话指令（`pets.<id>.say` 的两种形态）。
@@ -279,27 +268,6 @@ export function readLock(leaf: StateLeaf): LockState | null {
   // locked:true 却缺 expiresAt（或非法）= 形状非法：宁可不冻结，也不猜一个到期时刻
   if (typeof d.expiresAt !== 'number' || !Number.isFinite(d.expiresAt)) return null;
   return { locked: true, expiresAt: d.expiresAt };
-}
-
-/** 睡觉叶子的形态：`{ sleeping: true, start, loop, end }` = 正在睡（三段名由宿主挑定），
- *  `{ sleeping: false }` = 醒着。 */
-export type SleepState = { sleeping: true; start: string; loop: string; end: string } | { sleeping: false };
-
-/** 类型收窄：睡觉叶子 → SleepState（形状非法 → null，消费端跳过这一拍）。
- *
- *  这是状态不是指令：渲染端读它决定要不要睡，不往回写。三段名字由宿主挑定并一起写进叶子，
- *  渲染端照此播「开始（一次）→ 循环（无限）→ 起来（一次）」——自己重新挑会让两端播到不同的一套。
- *  `sleeping: true` 却缺任何一段名 = 形状非法：宁可不睡（保持现状），也不要播一段不存在的动画。
- */
-export function readSleep(leaf: StateLeaf): SleepState | null {
-  if (!leaf.data || typeof leaf.data !== 'object') return null;
-  const d = leaf.data as { sleeping?: unknown; start?: unknown; loop?: unknown; end?: unknown };
-  if (d.sleeping === false) return { sleeping: false };
-  if (d.sleeping !== true) return null;
-  for (const name of [d.start, d.loop, d.end]) {
-    if (typeof name !== 'string' || name === '') return null;
-  }
-  return { sleeping: true, start: d.start as string, loop: d.loop as string, end: d.end as string };
 }
 
 /** 位置指令的运动模式（三选一）。与宿主半侧的同名联合体是两份，改动时两边要一起改。 */

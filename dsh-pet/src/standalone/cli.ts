@@ -15,7 +15,6 @@ import { dshHomeDir, packageRoot } from '../host/helper-process.ts';
 import { apply } from '../host/index.ts';
 import { defaultLog, setDefaultLogger } from '../host/log-file.ts';
 import { runCheck, packageVersion } from './check.ts';
-import { createStandaloneAi } from './ai-provider.ts';
 import { createRequestSecurity } from './request-security.ts';
 import { writeStandaloneRuntime } from './runtime-state.ts';
 import { createStandaloneContext, type RegisteredRoute, type StandaloneLogger } from './context.ts';
@@ -44,13 +43,11 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
   // 用可替换的转发器解耦，让服务构造时只拿到「将来会是谁」。
   let forwardShutdown: (reason: string) => void = () => {};
   const portRef = { value: options.port };
-  const ai = createStandaloneAi(home, logger);
   const security = createRequestSecurity();
   const context = createStandaloneContext({
     port: () => portRef.value,
     logger,
     routes,
-    ai,
     authenticatedUrl: security.authenticatedUrl,
     // 托盘退出与 POST /shutdown 走同一条收尾路径。
     shutdown: (reason) => forwardShutdown(reason),
@@ -61,7 +58,6 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
     logger,
     port: options.port,
     security,
-    ai,
     status: () => ({
       name: 'dsh-pet-standalone',
       pid: process.pid,
@@ -137,12 +133,6 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
     desktopVisible.length === 0
       ? '  桌面小窗    0 只：display 需要 desktop 或 both 才会出现透明小窗（服务仍在运行）'
       : `  桌面小窗    ${desktopVisible.length} 只`,
-    ai.isReady()
-      ? '  AI          本机 API 已启用；自动碎碎念遵循设置页开关'
-      : '  AI          未配置或未启用，不发送模型请求；右键“打开 AI 设置”后在本机填写',
-    ai.getSettings().balanceProvider
-      ? `  余额        已选 ${ai.getSettings().balanceProvider}，设置页点「查询余额」取数`
-      : '  余额        未选服务商；设置页「AI 服务商」→「余额查询服务商」里选一家',
     '  不可用      会话工作状态 / DSH 系统通知',
     '  退出        Ctrl+C、POST /shutdown，或桌面托盘菜单的「退出」',
     '',

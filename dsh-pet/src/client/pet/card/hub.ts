@@ -28,7 +28,7 @@ export interface CardHub {
   card: CardStateApi;
   /** 动画链：换源、冻结、回执都在这里。 */
   ownAnim: OwnAnimation;
-  /** 三种气泡的单槽。 */
+  /** 气泡的单槽。 */
   bubbles: BubbleSlots;
   /** 位置跟随的弹簧。 */
   posFollow: PositionFollow;
@@ -44,8 +44,4 @@ export interface CardHub {
   playByName: PlayByName;
   /** 说一句。 */
   speak: Speak;
-  /** 此刻是否在睡（含入睡/醒来两段过渡）：自动来源据此闭嘴，显式唤醒走菜单或点击。 */
-  sleeping(): boolean;
-  /** 此刻是否被占用锁冻结：锁的语义是「把控制权交给第三方」，睡觉闸门对它让路。 */
-  locked(): boolean;
 }

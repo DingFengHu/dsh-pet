@@ -6,10 +6,8 @@
  * @module dsh-pet/src/client/pet/card/animation-flow
  */
 import { pick, pickSlot, rollKind } from '../../../shared/pickers.ts';
-import type { SleepState } from '../../../shared/state.ts';
 import { WORK_STATUS_INDEX } from '../../../shared/work-status.ts';
 import { decideNextAnimation } from '../animation/next-animation.ts';
-import { createSleepMachine } from './sleep-machine.ts';
 import type { CardHub } from './hub.ts';
 import type { EndedCue } from '../animation/cues.ts';
 import type { WorkStatusSnapshot } from '../../../shared/work-status.ts';
@@ -25,12 +23,6 @@ export interface AnimationFlow {
   resumeWorkStatusAnim(): boolean;
   /** 说一句：抽碎碎念动画并弹气泡，动画与气泡时长互相独立。 */
   speak(text: string, image?: string, url?: string, duration?: number, anim?: boolean): void;
-  /** 应用宿主写的睡觉状态：进入 → 播开始；退出 → 播起来。 */
-  applySleep(state: SleepState): void;
-  /** 此刻是否在睡（含入睡与醒来两段过渡）。 */
-  sleeping(): boolean;
-  /** 当前睡觉阶段；醒着为 null。点击路径要区分「入睡过渡」与「真睡着」。 */
-  sleepPhase(): 'start' | 'loop' | 'end' | null;
 }
 
 /** 注入的 react 能力。 */
@@ -61,25 +53,11 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
     const workStatusRef = useRef(workStatus);
     workStatusRef.current = workStatus;
 
-    // 睡觉交给独立状态机：这里只装配并转发（pickNext 在下方定义，状态机只持有引用，调用发生在播完之后）。
-    // 必须放 ref：状态机持有「当前阶段」，放函数体局部变量会在每次渲染重建，睡觉状态当场丢失
-    // （视频还在睡姿、菜单却显示「睡觉」，点它也不叫醒）。
-    const machineRef = useRef<ReturnType<typeof createSleepMachine> | null>(null);
-    const sleep = (): ReturnType<typeof createSleepMachine> =>
-      (machineRef.current ??= createSleepMachine(hub, pickNext, log));
-    /** 此刻是否在睡（含两段过渡）。 */
-    const sleeping = (): boolean => sleep().sleeping();
-    /** 当前睡觉阶段；醒着为 null。 */
-    const sleepPhase = (): 'start' | 'loop' | 'end' | null => sleep().phase();
-    /** 应用宿主写的睡觉状态（转发给状态机）。 */
-    const applySleep = (state: SleepState): void => sleep().apply(state);
     /** 非终态工作状态回到档位循环；冻结、空闲与终态都返回 false。 */
     const resumeWorkStatusAnim = (): boolean => {
       const card = hub.card;
       // 锁定期间不由这条路恢复档位动画；解冻路径会先解除冻结再调用。
       if (hub.ownAnim.isFrozen()) return false;
-      // 睡觉期间不恢复档位动画：工作状态照旧在跑，但睡着就是不看不听。
-      if (sleeping()) return false;
       const ws = workStatusRef.current;
       if (!ws || !ws.state || ws.state === 'success' || ws.state === 'error') return false;
       const pool = hub.anims().events?.workStatus;
@@ -100,8 +78,6 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
       const card = hub.card;
       // 占用锁：随机链唯一入口不掷骰，随机动画、转向、走位一起停住。
       if (hub.ownAnim.isFrozen()) return;
-      // 睡觉：随机链彻底停住（不掷骰、不转向、不走位），醒来由 applySleep 的 end 段收尾
-      if (sleeping()) return;
       const roll = Math.random();
       // 宠物固定时，掷骰把「转向/移动」权重按 0 算；菜单点播与显式点播不走这里。
       const kind = rollKind(roll, hub.cfg().animationWeights, { fixed: hub.cfg().fixedEnabled });
@@ -133,8 +109,6 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
     /** 按播完判定改状态。 */
     const applyEndedCue = (cue: EndedCue): void => {
       const card = hub.card;
-      // 睡觉的三段推进与「起来播完回随机链」都在状态机里：它说这次 ended 归它管就直接返回。
-      if (sleep().consumeEnded()) return;
       if (cue.kind === 'ignore') return;
       if (cue.kind === 'work-rotate') {
         card.actions.setOnce(true); // 保持 once=true，下一段播完再轮换。
@@ -178,8 +152,7 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
     const speak = (text: string, image?: string, url?: string, duration?: number, anim?: boolean): void => {
       const card = hub.card;
       let name: string | null = null;
-      // 睡着时只弹气泡、不换动画：梦话与命令气泡都要显示，但睡姿不能被打断
-      if (anim !== false && !sleeping()) {
+      if (anim !== false) {
         const pool = hub.anims().events?.whisper;
         if (!pool || pool.length === 0) {
           console.error('[dsh-pet] 配置缺少 animations.events.whisper，无法播放碎碎念动画');
@@ -198,6 +171,6 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
       hub.bubbles.showWhisper(text, { image, url }, duration);
     };
 
-    return { applyEndedCue, applySleep, pickNext, resumeWorkStatusAnim, sleepPhase, sleeping, speak };
+    return { applyEndedCue, pickNext, resumeWorkStatusAnim, speak };
   };
 }

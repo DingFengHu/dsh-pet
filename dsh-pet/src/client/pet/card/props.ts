@@ -5,9 +5,8 @@
  * @module dsh-pet/src/client/pet/card/props
  */
 import type * as ReactNS from 'react';
-import type { BalanceState } from '../../../shared/balance/index.ts';
 import type { PetCollisionSlot } from '../../../shared/physics.ts';
-import type { LockState, PositionMode, SayCue, PetFacing, SleepState } from '../../../shared/state.ts';
+import type { LockState, PositionMode, SayCue, PetFacing } from '../../../shared/state.ts';
 import type { MenuMoreItem } from '../../../shared/menu.ts';
 import type { WorkStatusSnapshot } from '../../../shared/work-status.ts';
 import type { RuntimePet } from '../types.ts';
@@ -16,14 +15,6 @@ import type { RuntimePet } from '../types.ts';
 export interface PetCardProps {
   /** 成品配置。 */
   cfg: RuntimePet;
-  /** 最近一次余额结果。 */
-  balance: BalanceState | null;
-  /** 余额成功拉取次数，变化时播档位动画。 */
-  balanceTick: number;
-  /** 余额不可用提示次数。 */
-  balanceNoticeTick: number;
-  /** 本次余额是否由用户手动请求；手动请求即使关闭 balanceEnabled 也答复。 */
-  balanceManual: boolean;
   /** 工作状态快照。 */
   workStatus: WorkStatusSnapshot | null;
   /** 工作状态变化次数。 */
@@ -50,10 +41,6 @@ export interface PetCardProps {
   lock?: LockState;
   /** 锁叶子变化次数。 */
   lockTick: number;
-  /** 本宠物的睡觉状态：三段名字由宿主挑定；睡着时随机链停住、自动来源闭嘴。 */
-  sleep?: SleepState;
-  /** 睡觉叶子变化次数。 */
-  sleepTick: number;
   /** 第三方菜单项快照；传 ref 是因为只在右键那一刻读。 */
   menuItemsRef: ReactNS.MutableRefObject<MenuMoreItem[]>;
   /** 宠物间碰撞站场。 */

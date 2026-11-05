@@ -161,8 +161,6 @@ function mergePet(
     name,
     size: petNumber(p.size, base.size, 1, label, 'size', id),
     ...petSizePercentField(p.sizePercent, base.sizePercent, label, id),
-    balanceEnabled: petBool(p.balanceEnabled, base.balanceEnabled, label, 'balanceEnabled', id),
-    whisperEnabled: petBool(p.whisperEnabled, base.whisperEnabled, label, 'whisperEnabled', id),
     workStatusEnabled: petBool(p.workStatusEnabled, base.workStatusEnabled, label, 'workStatusEnabled', id),
     fixedEnabled: petBool(p.fixedEnabled, base.fixedEnabled, label, 'fixedEnabled', id),
     display: petEnum(p.display, PET_DISPLAY_SET, base.display, label, 'display', id),
@@ -171,25 +169,6 @@ function mergePet(
       marginX: petNumber(ownPos.marginX, basePos.marginX, -Infinity, label, 'position.marginX', id),
       marginY: petNumber(ownPos.marginY, basePos.marginY, -Infinity, label, 'position.marginY', id),
     },
-    // 实例级人设（可选）：只放行非空字符串；没写 / 空串 / 纯空白 / null → 该键不出现在结果里
-    // （回落由消费端做：./persona 的 petPersona 取不到实例级就取条目顶层）；非字符串 → 告警 + 忽略。
-    // 这里刻意不填生效值：人设的默认值是所属条目那一份，一旦填进每只实例，/pet-display 写回就会把
-    // 「跟随条目」固化成显式覆盖——之后用户改条目人设，这些实例不再跟着变。
-    ...petPersonaField(p.whisperPrompt, label, id),
   };
 }
 
-/**
- * 实例级 whisperPrompt 的合并：写了非空字符串 → 原样带出；否则返回空对象（该键不出现）。
- * 显式写了非字符串（数字/对象/布尔）才算配置错误 → 告警一次并忽略（回落条目），与 petNumber 同口径。
- */
-function petPersonaField(own: unknown, label: string, id: string): { whisperPrompt?: string } {
-  if (typeof own === 'string') {
-    // 空串 / 纯空白 = 没写（设置页把输入框清空后提交的就是 ''，这是合法状态，不告警）
-    return own.trim() === '' ? {} : { whisperPrompt: own };
-  }
-  if (own !== undefined && own !== null) {
-    warnOnce(`${label}:whisperPrompt:${id}`, `宠物「${id}」的 whisperPrompt 非法，已忽略（回落所属条目人设）`);
-  }
-  return {};
-}

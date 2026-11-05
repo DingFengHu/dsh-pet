@@ -29,9 +29,6 @@ export interface TodoReminderTickDeps {
   effectivePetList: () => Record<string, unknown>[];
   /** 占用锁：被第三方占用的宠物这一拍不打扰。 */
   lock: Pick<LockStore, 'locked'>;
-  /** 睡着的宠物不打扰：提醒是「跟它说话」，睡着时说了它也听不见，换一只醒着的。
-   *  缺省视为都不睡（老调用方与测试替身不必改）。 */
-  isSleeping?: (petId: string) => boolean;
   /** 轮询状态：提醒写进 `pets.<id>.say`。 */
   state: Pick<PollStateStore, 'writePet'>;
   /** 日志出口。 */
@@ -51,7 +48,6 @@ export type TodoReminderInput = {
   /** 当前挂着长轮询的端数量：>0 表示有人能看到这次提醒。 */
   waiterCount: () => number;
 } & Pick<PetLookup, 'lock'> &
-  Pick<PetLookup, 'sleep'> &
   Pick<TodoReminderTickDeps, 'todos' | 'effectivePetList' | 'state' | 'log' | 'isVoiceTodoEnabled'>;
 /**
  * 挑一个承担这次提醒的宠物：优先网页端可见的，其次桌面端；被第三方占用的跳过。
@@ -64,7 +60,6 @@ export type TodoReminderInput = {
 export function pickReminderSpeaker(
   pets: readonly Record<string, unknown>[],
   isLocked: (petId: string) => boolean,
-  isSleeping: (petId: string) => boolean = () => false,
 ): string | null {
   let desktopOnly: string | null = null;
   for (const pet of pets) {
@@ -72,7 +67,6 @@ export function pickReminderSpeaker(
     if (petId === '') continue;
     if (pet.display === 'none') continue;
     if (isLocked(petId)) continue;
-    if (isSleeping(petId)) continue;
     if (pet.display === 'web' || pet.display === 'both') return petId;
     desktopOnly ??= petId;
   }
@@ -92,11 +86,7 @@ export async function tickTodoReminders(deps: TodoReminderTickDeps): Promise<voi
   const due = pickReminder(await deps.todos.list(), now);
   if (due === null) return;
   const pets = deps.effectivePetList();
-  const speaker = pickReminderSpeaker(
-    pets,
-    (petId) => deps.lock.locked(petId),
-    (petId) => deps.isSleeping?.(petId) ?? false,
-  );
+  const speaker = pickReminderSpeaker(pets, (petId) => deps.lock.locked(petId));
   if (speaker === null) return;
   // 该由哪一端念：pickReminderSpeaker 已排除 display=none，所以这里不会是 null（防御性保留可选）；
   // 播报开关关掉时干脆不写这个键（叶子不带 = 谁都不念），气泡照旧弹。
@@ -119,7 +109,7 @@ export async function tickTodoReminders(deps: TodoReminderTickDeps): Promise<voi
  * @param deps - 宿主上下文与一拍所需的能力。
  */
 export function registerTodoReminders(deps: TodoReminderInput): void {
-  const { ctx, effectivePetList, isVoiceTodoEnabled, lock, log, sleep, state, todos, waiterCount } = deps;
+  const { ctx, effectivePetList, isVoiceTodoEnabled, lock, log, state, todos, waiterCount } = deps;
 
   /** 一拍：失败只打日志，不让循环停摆。 */
   const tick = async (): Promise<void> => {
@@ -127,7 +117,6 @@ export function registerTodoReminders(deps: TodoReminderInput): void {
       await tickTodoReminders({
         effectivePetList,
         hasListener: () => waiterCount() > 0,
-        isSleeping: (petId) => sleep.sleeping(petId),
         isVoiceTodoEnabled,
         lock,
         log,

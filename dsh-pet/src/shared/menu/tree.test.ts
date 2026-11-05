@@ -8,23 +8,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildMoreBranch, isSleepAllowedAction, readMenuItems } from './tree.ts';
-
-describe('isSleepAllowedAction —— 睡着时仍然放行的动作', () => {
-  test('睡觉 / 起来 / 维护类 / 第三方菜单项放行', () => {
-    for (const action of ['sleep', 'wake', 'home', 'set-display', 'reload', 'third-party']) {
-      assert.equal(isSleepAllowedAction(action), true, action + ' 应放行');
-    }
-  });
-
-  test('打扰类一律不放行（对话 / 碎碎念 / 余额 / 待办 / 动作点播）', () => {
-    for (const action of ['chat', 'whisper', 'show-balance', 'todo']) {
-      assert.equal(isSleepAllowedAction(action), false, action + ' 应被拒');
-    }
-    // 点播动画的叶子只有 anim、没有 action
-    assert.equal(isSleepAllowedAction(undefined), false);
-  });
-});
+import { buildMoreBranch, readMenuItems } from './tree.ts';
 
 describe('buildMoreBranch —— 「更多」：label 唯一平铺，重名收进 owner 子菜单', () => {
   test('没有第三方项 → null（菜单里不出现空的「更多」）', () => {

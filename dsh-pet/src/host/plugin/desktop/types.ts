@@ -4,7 +4,6 @@
  * 只声明依赖形状，不含实现；字段语义见各使用处。
  * @module dsh-pet/src/host/plugin/desktop/types
  */
-import type { BalancePoll } from '../balance-poll.ts';
 import type { DownloadReport } from '../download-report.ts';
 import type { HostSetup } from '../setup.ts';
 import type { HostContext } from '../context.ts';
@@ -12,8 +11,9 @@ import type { RouteResult } from '../../http.ts';
 
 /** 桌面 Helper 生命周期的输入。 */
 export type DesktopHelperDeps = Pick<HostSetup, 'configPaths' | 'log' | 'thumbUserRoot'> &
-  Pick<BalancePoll, 'effectivePetList'> &
   Pick<DownloadReport, 'reportDownload'> & {
+    /** 当前生效宠物列表（成品配置拍平）。 */
+    effectivePetList: () => Record<string, unknown>[];
     /** 宿主上下文（apply 收到的那一个）。 */
     ctx: HostContext;
     /**

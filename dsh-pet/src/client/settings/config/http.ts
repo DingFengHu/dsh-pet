@@ -5,8 +5,7 @@
  * @module dsh-pet/src/client/settings/config/http
  */
 import { ROUTE_PATH } from '../../../shared/constants.ts';
-import type { FontConfig, ModelSelection, Pet, PhysicsParams, Weights } from '../../../shared/types.ts';
-import type { ModelCatalogGroup } from '../picker/index.ts';
+import type { FontConfig, Pet, PhysicsParams, Weights } from '../../../shared/types.ts';
 import type { MergedConfig } from './read.ts';
 
 /** 配置文件路径与存储位置清单；宿主按平台推导，反推不出 `profile` 时为空串。 */
@@ -31,10 +30,6 @@ export interface SaveFields {
   pets: readonly Pet[];
   notificationsEnabled: boolean;
   clickSoundEnabled: boolean;
-  whisperImageEnabled: boolean;
-  chatImageEnabled: boolean;
-  /** 对话动作联动开关。 */
-  chatAnimationEnabled: boolean;
   confineToScreen: boolean;
   trayEnabled: boolean;
   /** 语音播报总开关。 */
@@ -43,15 +38,9 @@ export interface SaveFields {
   voiceName: string;
   /** 播放音量系数：0–1 的小数，1 = 最大音量，0 = 静音。 */
   voiceVolume: number;
-  /** 周期碎碎念要不要念出来。 */
-  voiceWhisperEnabled: boolean;
   /** 待办提醒要不要念出来。 */
   voiceTodoEnabled: boolean;
   physics: PhysicsParams;
-  whisperModel: ModelSelection;
-  chatModel: ModelSelection;
-  chatMemoryRounds: number;
-  chatImageLimit: number;
   font: FontConfig;
   /** 动作频率权重（main 条目）：三项合计 ≤ 100，随机动作是余量。 */
   animationWeights: Weights;
@@ -75,21 +64,13 @@ export function buildSaveBody(fields: SaveFields): Record<string, unknown> {
     pets: fields.pets,
     notificationsEnabled: fields.notificationsEnabled,
     clickSoundEnabled: fields.clickSoundEnabled,
-    whisperImageEnabled: fields.whisperImageEnabled,
-    chatImageEnabled: fields.chatImageEnabled,
-    chatAnimationEnabled: fields.chatAnimationEnabled,
     confineToScreen: fields.confineToScreen,
     trayEnabled: fields.trayEnabled,
     voiceEnabled: fields.voiceEnabled,
     voiceName: fields.voiceName,
     voiceVolume: fields.voiceVolume,
-    voiceWhisperEnabled: fields.voiceWhisperEnabled,
     voiceTodoEnabled: fields.voiceTodoEnabled,
     physics: fields.physics,
-    whisperModel: fields.whisperModel,
-    chatModel: fields.chatModel,
-    chatMemoryRounds: fields.chatMemoryRounds,
-    chatImageLimit: fields.chatImageLimit,
     font: fields.font,
     animationWeights: fields.animationWeights,
   };
@@ -124,23 +105,6 @@ export async function loadMeta(): Promise<ConfigMeta | null> {
     const response = await fetch(ROUTE_PATH + '/config/meta');
     if (!response.ok) return null;
     return (await response.json()) as ConfigMeta;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 读候选模型清单。
- *
- * @returns 服务商分组；响应缺 `providers` 或请求失败时返回 `null`（选择器显示「拉取失败」）。
- */
-export async function loadModelCatalog(): Promise<ModelCatalogGroup[] | null> {
-  try {
-    const response = await fetch(ROUTE_PATH + '/models');
-    if (!response.ok) return null;
-    const body = (await response.json()) as { providers?: unknown };
-    if (!body || !Array.isArray(body.providers)) return null;
-    return body.providers as ModelCatalogGroup[];
   } catch {
     return null;
   }

@@ -1,7 +1,7 @@
 /**
- * 会话交互：占用锁 /lock、碎碎念 /whisper、第三方投喂 /broadcast、气泡清除 /bubble/clear。
+ * 会话交互：占用锁 /lock、第三方投喂 /broadcast、气泡清除 /bubble/clear。
  *
- * 不决定文案与语气（归 shared/whisper）。
+ * 不生成文案：文本由调用方给定。
  * 依赖（PetRouteDeps）显式传入，模块内不读全局、不建状态。
  * @module dsh-pet/src/host/routes/interaction
  */
@@ -20,8 +20,7 @@ import { failResult, invalidJson, methodNotAllowed, okResult } from './result.ts
 
 /** 会话交互领域：未命中返回 undefined，命中返回应答。 */
 export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
-  const { configPaths, lock, lockBlocked, memeDirsFor, publishWhisper, requirePet, sleep, state, surfaceBlocked } =
-    deps;
+  const { configPaths, lock, lockBlocked, memeDirsFor, requirePet, state, surfaceBlocked } = deps;
   const { body, method, rest, url } = input;
 
   // 占用锁：POST /lock?pet= 取锁 / 续期二合一（lockId 给了 = 续期，续期即心跳，丢了回 lock-lost），
@@ -60,41 +59,9 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
         if (d.reason === 'lock-lost') extra.cause = d.cause;
         return failResult(d.reason, d.message, extra);
       }
-      // 锁 = 第三方接管，所以取锁就把睡着的宠物叫醒：否则它会带着睡姿被指挥，
-      // 而且每条指令都要再走一次「持锁让路」的特判。唤醒只写一次叶子，渲染端照常播「起来」。
-      sleep.wake(petId);
       return okResult({ ok: true, lockId: d.lockId, petId: d.petId, expiresAt: d.expiresAt });
     } catch (e) {
       // 配置读取失败等（安装损坏）→ 显式失败，不静默（与其他动作端点同一口径）
-      return failResult('generate-error', e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // 碎碎念：POST /whisper?pet= 立即让桌宠新说一句，返回 {ok,text,image?}。文本照旧写进 S 的
-  // pets.<id>.say（与命令气泡、对话回复同一个叶子），同时随响应带回。
-  // 手动语义不受 whisperEnabled 门控：那个字段只关自动周期。
-  // ?image= 指定这一次用哪张图（右键「配图」菜单点了具体某张）：不在池内 → unknown-image，
-  // 由 publishWhisper 判定，这里只搬运。
-  if (rest === 'whisper') {
-    if (method !== 'POST') return methodNotAllowed();
-    try {
-      // pet 必填且必须真实存在：空串会让人设/配图按 main 条目取、生成结果写进没人消费的
-      // `pets[""].say`，还回 ok:true（钱花了、话丢了、调用方以为成功）。
-      const who = requirePet(url.searchParams, () => readAllConfig(configPaths), { surface: true });
-      if (!who.ok) return who.res;
-      // 谁点的谁念：请求面在 requirePet 里已被 displayCovers 校验过，具体到一端就用它；
-      // both / any 不足以指定一端，留空交给生成函数按 display 推导。
-      const want = normalizeSurface(url.searchParams.get('surface'));
-      const r = await publishWhisper(
-        who.petId,
-        url.searchParams.get('image') ?? undefined,
-        want === null ? undefined : voiceTargetOfSurface(want),
-      );
-      if (r.ok) return okResult({ ok: true, text: r.text, ...(r.image ? { image: r.image } : {}) });
-      // 真实 reason 原样透出（独立模式是 `provider-missing`，见 ./whisper 的联合体）——
-      // 不再把一切失败糊成 generate-error，调用方据此能分清「没配模型」与「生成炸了」。
-      return failResult(r.reason, r.message ?? '生成失败');
-    } catch (e) {
       return failResult('generate-error', e instanceof Error ? e.message : String(e));
     }
   }
@@ -143,7 +110,7 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
       // 实际生效的时长与联动开关，调用方不用自己猜缺省是多少。
       // 配图两种形态二选一（判定层保证）：url 形态写 url，名称形态写池内规范名，都没有则纯文本。
       const pic = d.url !== undefined ? { url: d.url } : d.image !== undefined ? { image: d.image } : {};
-      // 与手动碎碎念同一口径：调用方用 ?surface= 明说了「我希望这句显示在哪一端」，就由那一端念；
+      // 调用方用 ?surface= 明说了「我希望这句显示在哪一端」，就由那一端念；
       // both / any 不足以指定一端，留空不写（消费端据此不念）。
       const want = normalizeSurface(url.searchParams.get('surface'));
       const voiceTo = want === null ? undefined : voiceTargetOfSurface(want);
@@ -163,7 +130,7 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
 
   // 清空气泡：POST /bubble/clear?pet= 收起该宠物当前正显示的说话气泡，与 /broadcast 共用
   // pets.<id>.say 叶子。清空靠 `{ clear: true }` 标记——空文本表达不了这个动作（消费端会把
-  // 空文本判成非法、整拍跳过）。只收说话气泡，余额/工作状态气泡与 anim/position/throw 都不动。
+  // 空文本判成非法、整拍跳过）。只收说话气泡，工作状态气泡与 anim/position/throw 都不动。
   // 幂等：没有气泡也回 {ok:true}。
   if (rest === 'bubble/clear') {
     if (method !== 'POST') return methodNotAllowed();

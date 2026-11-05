@@ -11,11 +11,11 @@ import { dirname } from 'node:path';
 import { CORNER_SET, isValidPetId, PET_DISPLAY_SET } from './constants.ts';
 import { isValidSizePercent } from '../../shared/pet-size.ts';
 import type { ConfigPaths } from './constants.ts';
-import { fontValid, modelSelectionValid, physicsValid, topFieldValid } from './validate.ts';
+import { fontValid, physicsValid, topFieldValid } from './validate.ts';
 
 /**
- * 保存用户层（PUT /config）：接受 pets + 全局开关 + physics / font / 两个模型 / 对话参数。
- * 非白名单顶层字段（whisperPrompt、eventsRefreshSec、memes 等）从 existing 原样透传保留——
+ * 保存用户层（PUT /config）：接受 pets + 全局开关 + physics / font / 动作频率。
+ * 非白名单顶层字段（animations、memes、已下线功能的旧字段等）从 existing 原样透传保留——
  * 用户手动编辑的精调配置不会被设置页保存抹掉；白名单字段也只在请求体真的传了时才算白名单。
  * 非法 → 返回 null，由路由回 200 + 失败实体。与读取分离：文件宠物永不回写。
  */
@@ -48,13 +48,9 @@ export function saveUserConfig(
       defaultLog('warn', `dsh-pet: pet「${id}」缺少 name，已按默认 ${id}（宠物 id）处理`);
       name = id;
     }
-    const balanceEnabled = pp.balanceEnabled;
-    if (typeof balanceEnabled !== 'boolean') return null;
-    const whisperEnabled = pp.whisperEnabled;
-    if (whisperEnabled !== undefined && typeof whisperEnabled !== 'boolean') return null;
     const workStatusEnabled = pp.workStatusEnabled;
     if (workStatusEnabled !== undefined && typeof workStatusEnabled !== 'boolean') return null;
-    // 宠物固定（随机链不再抽「转向 / 移动」两档）：与上面两个开关同语义——可选，
+    // 宠物固定（随机链不再抽「转向 / 移动」两档）：与 workStatusEnabled 同语义——可选，
     // 传了必须是布尔，没传则走下面的读取侧默认值（内置默认 false = 不固定）。
     const fixedEnabled = pp.fixedEnabled;
     if (fixedEnabled !== undefined && typeof fixedEnabled !== 'boolean') return null;
@@ -66,25 +62,15 @@ export function saveUserConfig(
     const marginX = Number(pos.marginX);
     const marginY = Number(pos.marginY);
     if (!Number.isFinite(marginX) || !Number.isFinite(marginY)) return null;
-    // 实例级人设（可选）：非空字符串才落盘（trim 后写）；空串/纯空白 = 不写该键——
-    // 落盘结果是「这只宠物没有自己的覆盖」，读取侧（./persona 的 petPersona）自动回落到所属条目。
-    // 也就是说：清空输入框 + 保存 = 删除覆盖，而不是写一个空人设。
-    // 非字符串（且非 undefined/null）与其他字段同口径：整包 400，不静默丢用户输入。
-    const rawPersona = pp.whisperPrompt;
-    if (rawPersona !== undefined && rawPersona !== null && typeof rawPersona !== 'string') return null;
-    const persona = typeof rawPersona === 'string' ? rawPersona.trim() : '';
     const pet: Record<string, unknown> = {
       id,
       name,
       size,
-      balanceEnabled,
-      whisperEnabled,
       workStatusEnabled,
       fixedEnabled,
       display,
       position: { corner, marginX, marginY },
     };
-    if (persona) pet.whisperPrompt = persona;
     if (sizePercent !== undefined && sizePercent !== null) pet.sizePercent = sizePercent;
     out.push(pet);
   }
@@ -93,13 +79,6 @@ export function saveUserConfig(
   // 点击音效开关（全局布尔，与 notificationsEnabled 同语义）：传了必须是布尔，没传走透传保留
   const cse = o.clickSoundEnabled;
   if (cse !== undefined && typeof cse !== 'boolean') return null;
-  const wie = o.whisperImageEnabled;
-  if (wie !== undefined && typeof wie !== 'boolean') return null;
-  const cie = o.chatImageEnabled;
-  if (cie !== undefined && typeof cie !== 'boolean') return null;
-  // 对话动作联动开关（全局布尔）：与上面几个开关同一套语义——传了必须是布尔，没传走透传保留
-  const cae = o.chatAnimationEnabled;
-  if (cae !== undefined && typeof cae !== 'boolean') return null;
   const cts = o.confineToScreen;
   if (cts !== undefined && typeof cts !== 'boolean') return null;
   // 语音播报开关与音色（全局）：与上面几个布尔同语义；音色必须落在白名单内，
@@ -111,10 +90,8 @@ export function saveUserConfig(
   // 播放音量（全局系数，0–1）：与上面同一套语义——传了必须合法，没传走透传保留。
   const vv = o.voiceVolume;
   if (vv !== undefined && !topFieldValid('voiceVolume', vv)) return null;
-  // 语音播报的两个细分开关（周期碎碎念 / 待办提醒）：与上面两个布尔同语义——传了必须是布尔，
+  // 待办提醒的语音开关：与上面两个布尔同语义——传了必须是布尔，
   // 没传走透传保留；校验直接复用读取侧的 topFieldValid，读写同一份规则。
-  const vwe = o.voiceWhisperEnabled;
-  if (vwe !== undefined && !topFieldValid('voiceWhisperEnabled', vwe)) return null;
   const vte = o.voiceTodoEnabled;
   if (vte !== undefined && !topFieldValid('voiceTodoEnabled', vte)) return null;
   // 系统托盘开关（全局，仅桌面模式）：与上面几个全局布尔同语义——传了必须是布尔，没传走透传保留。
@@ -135,78 +112,41 @@ export function saveUserConfig(
   // 校验直接复用读取侧的 fontValid（family 白名单 / size 4~200 / followPet 布尔），读写同一份规则。
   const fo = o.font;
   if (fo !== undefined && !fontValid(fo)) return null;
-  // whisperModel / chatModel（碎碎念 / 对话各自的服务商 + 模型；设置页两个下拉框写的就是它们）：
-  // 与 physics 同一套语义——传了就整段校验后进白名单，没传则走下面的透传保留。
-  // 落盘时归一化成 { provider, model } 两个 trim 过的字符串（请求体多带的键不写进用户层）。
-  const wm = o.whisperModel;
-  if (wm !== undefined && !modelSelectionValid(wm)) return null;
-  const cm = o.chatModel;
-  if (cm !== undefined && !modelSelectionValid(cm)) return null;
-  // chatMemoryRounds（对话历史条数；设置页「AI 模型与对话上下文」区的数字输入框写的就是它）：
-  // 与 physics / 模型同语义——传了就校验后进白名单，没传则走下面的透传保留。
-  // 校验直接复用读取侧的 topFieldValid（有限且 ≥ 0），读写同一份规则，不另写一套。
-  const cmr = o.chatMemoryRounds;
-  if (cmr !== undefined && !topFieldValid('chatMemoryRounds', cmr)) return null;
-  // chatImageLimit（对话配图张数上限；设置页「AI 模型与对话上下文」区的数字输入框写的就是它）：
-  // 与 chatMemoryRounds 同一套语义——传了就校验后进白名单，没传则走下面的透传保留。
-  const cil = o.chatImageLimit;
-  if (cil !== undefined && !topFieldValid('chatImageLimit', cil)) return null;
-  const cleanModel = (v: Record<string, unknown>): { provider: string; model: string } => ({
-    provider: String(v.provider).trim(),
-    model: String(v.model).trim(),
-  });
   const cleanWeights = (v: Record<string, unknown>): { idle: number; turn: number; move: number } => ({
     idle: Number(v.idle),
     turn: Number(v.turn),
     move: Number(v.move),
   });
-  // 白名单可编辑字段：pets 来自请求体，其余（四个全局开关 / physics / 两个模型 /
-  // 对话历史条数）同样只在请求体真的传了时才写（未传则走下面的透传保留，不凭空造值）
+  // 白名单可编辑字段：pets 来自请求体，其余（全局开关 / physics / font / 动作频率）
+  // 同样只在请求体真的传了时才写（未传则走下面的透传保留，不凭空造值）
   const outConfig: { pets: unknown[]; [key: string]: unknown } = { pets: out };
   if (ne !== undefined) outConfig.notificationsEnabled = ne;
   if (cse !== undefined) outConfig.clickSoundEnabled = cse;
-  if (wie !== undefined) outConfig.whisperImageEnabled = wie;
-  if (cie !== undefined) outConfig.chatImageEnabled = cie;
-  if (cae !== undefined) outConfig.chatAnimationEnabled = cae;
   if (cts !== undefined) outConfig.confineToScreen = cts;
   if (ve !== undefined) outConfig.voiceEnabled = ve;
   if (vn !== undefined) outConfig.voiceName = vn;
   if (vv !== undefined) outConfig.voiceVolume = vv;
-  if (vwe !== undefined) outConfig.voiceWhisperEnabled = vwe;
   if (vte !== undefined) outConfig.voiceTodoEnabled = vte;
   if (te !== undefined) outConfig.trayEnabled = te;
   if (ph !== undefined) outConfig.physics = ph;
   if (aw !== undefined) outConfig.animationWeights = cleanWeights(aw as Record<string, unknown>);
   if (fo !== undefined) outConfig.font = fo;
-  if (wm !== undefined) outConfig.whisperModel = cleanModel(wm as Record<string, unknown>);
-  if (cm !== undefined) outConfig.chatModel = cleanModel(cm as Record<string, unknown>);
-  // 数值归一化落盘：请求体传 "9" 也存成 9（与读取侧 topFieldValid 的 Number() 口径一致）
-  if (cmr !== undefined) outConfig.chatMemoryRounds = Number(cmr);
-  if (cil !== undefined) outConfig.chatImageLimit = Number(cil);
   // 透传保留：请求体未携带的顶层字段，从 existing（磁盘现有用户文件）原样带回——
-  // 设置页只提交 pets(+全局开关+physics+模型+对话历史条数)，手改的 whisperPrompt/memes/... 借此保住。
+  // 设置页只提交 pets(+全局开关+physics+font+动作频率)，手改的 memes/... 借此保住。
   // 白名单字段只在「请求体传了」时才算白名单（已由上方写入）；未传时走这里透传磁盘旧值——
   // 否则整包调用的调用方漏传一个字段，就会把用户既有设置悄悄抹成默认。
   const bodyOwned = new Set(['pets']);
   if (ne !== undefined) bodyOwned.add('notificationsEnabled');
   if (cse !== undefined) bodyOwned.add('clickSoundEnabled');
-  if (wie !== undefined) bodyOwned.add('whisperImageEnabled');
-  if (cie !== undefined) bodyOwned.add('chatImageEnabled');
-  if (cae !== undefined) bodyOwned.add('chatAnimationEnabled');
   if (cts !== undefined) bodyOwned.add('confineToScreen');
   if (ve !== undefined) bodyOwned.add('voiceEnabled');
   if (vn !== undefined) bodyOwned.add('voiceName');
   if (vv !== undefined) bodyOwned.add('voiceVolume');
-  if (vwe !== undefined) bodyOwned.add('voiceWhisperEnabled');
   if (vte !== undefined) bodyOwned.add('voiceTodoEnabled');
   if (te !== undefined) bodyOwned.add('trayEnabled');
   if (ph !== undefined) bodyOwned.add('physics');
   if (aw !== undefined) bodyOwned.add('animationWeights');
   if (fo !== undefined) bodyOwned.add('font');
-  if (wm !== undefined) bodyOwned.add('whisperModel');
-  if (cm !== undefined) bodyOwned.add('chatModel');
-  if (cmr !== undefined) bodyOwned.add('chatMemoryRounds');
-  if (cil !== undefined) bodyOwned.add('chatImageLimit');
   if (existing && typeof existing === 'object') {
     for (const key of Object.keys(existing)) {
       if (bodyOwned.has(key)) continue; // 白名单字段由请求体决定
@@ -230,30 +170,3 @@ export function syncUserConfigFromDefault(paths: ConfigPaths): void {
   writeFileSync(paths.userFile, raw, 'utf8');
 }
 
-/**
- * 对话记忆截取：取尾部 rounds 轮（1 轮 = 1 问 1 答 → 2 条）。
- * 不能写 messages.slice(-rounds * 2)：rounds = 0 时 -0 === 0，slice(-0) 返回整个数组，
- * 「关掉历史」反而变成「带全部历史」。这里显式分支：0 → 空列表，> 0 → 截尾部。
- */
-export function sliceMemoryRounds<T>(messages: T[], rounds: number): T[] {
-  return rounds > 0 ? messages.slice(-Math.floor(rounds) * 2) : [];
-}
-
-/**
- * 对话记忆按轮删除：`ts` 落在集合里的消息整轮移除（一轮两条共享同一个 `ts`，所以天然成对）。
- *
- * 不用「空集合 = 全删」表达清空：那会让调用方在漏传参数时静默抹掉全部历史。清空是调用方
- * 的另一条显式分支（传空数组 = 一条都不删）。
- *
- * @param messages - 记忆数组。
- * @param ts - 要删除的轮时间戳集合。
- * @returns 保留下来的消息，以及被移除的条数。
- */
-export function removeRoundsByTs<T extends { ts: number }>(
-  messages: readonly T[],
-  ts: readonly number[],
-): { messages: T[]; removed: number } {
-  const doomed = new Set(ts);
-  const messages_ = messages.filter((m) => !doomed.has(m.ts));
-  return { messages: messages_, removed: messages.length - messages_.length };
-}

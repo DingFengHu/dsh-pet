@@ -14,7 +14,6 @@ import { flattenPetList, readAllConfig } from '../host/config.ts';
 import { dshHomeDir } from '../host/helper-process.ts';
 import { apply } from '../host/index.ts';
 import { createFileLogger, setDefaultLogger } from '../host/log-file.ts';
-import { createStandaloneAi } from '../standalone/ai-provider.ts';
 import { packageVersion } from '../standalone/check.ts';
 import { createStandaloneContext, type RegisteredRoute } from '../standalone/context.ts';
 import { configPathsFor } from '../standalone/options.ts';
@@ -104,16 +103,14 @@ async function boot(): Promise<void> {
 
   // 与 CLI 同一套安全模型：令牌只经「配置页地址的 #token=」递给浏览器，不进日志
   const security = createRequestSecurity();
-  const ai = createStandaloneAi(dshHomeDir(), logger);
   const context = createStandaloneContext({
     port: () => port,
     logger,
     routes,
-    ai,
     authenticatedUrl: security.authenticatedUrl,
   });
 
-  const server = await startRouter(routes, { security, ai, log, status, landingPage });
+  const server = await startRouter(routes, { security, log, status, landingPage });
   port = server.port;
   const origin = `http://127.0.0.1:${port}`;
   log(`本机服务 ${origin}`);
@@ -164,7 +161,6 @@ async function boot(): Promise<void> {
     // 退出前把最后一批日志刷出去（定时器最多 1s，这里显式补一次）
     void logger.flush();
     logger.dispose();
-    void ai.dispose();
     void context.dispose().catch(() => undefined);
     void server.close().catch(() => undefined);
   });

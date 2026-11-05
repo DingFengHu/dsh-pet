@@ -37,8 +37,6 @@ function addPet() {
     name: '新宠物',
     size: 462,
     display: 'none',
-    balanceEnabled: true,
-    whisperEnabled: true,
     workStatusEnabled: true,
     fixedEnabled: false,
     position: { corner: 'bottom-right', marginX: 40, marginY: 40 },
@@ -92,7 +90,7 @@ function petCard() {
     petBar(),
     avatarRow(pet),
     textField('pet-name', '显示名', pet.name || '', (value) => { pet.name = value; }),
-    textField('pet-id', '标识（id）', pet.id, (value) => { pet.id = value.trim(); }, { disabled: true, hint: '标识决定素材目录与记忆文件，建好之后不能在这里改。' }),
+    textField('pet-id', '标识（id）', pet.id, (value) => { pet.id = value.trim(); }, { disabled: true, hint: '标识决定素材目录，建好之后不能在这里改。' }),
     make('div', { class: 'grid2' }, [
       numberField('pet-size', '画框大小（px）', pet.size, (value) => { pet.size = value; }, { min: 1, step: 1 }),
       textField('pet-size-percent', '占屏宽度（%）', sizePercent, (value) => {
@@ -106,45 +104,10 @@ function petCard() {
       numberField('pet-margin-x', '水平边距（px）', pet.position.marginX, (value) => { pet.position.marginX = value; }, { step: 1 }),
     ]),
     numberField('pet-margin-y', '垂直边距（px）', pet.position.marginY, (value) => { pet.position.marginY = value; }, { step: 1 }),
-    toggleRow('pet-balance', '余额功能', '开启后这只宠物会在余额变化时播动画并显示气泡。', pet.balanceEnabled !== false, (value) => { pet.balanceEnabled = value; }),
-    toggleRow('pet-whisper', '碎碎念', '按周期让模型生成一句话并播放；不需要就关掉，省调用额度。', pet.whisperEnabled !== false, (value) => { pet.whisperEnabled = value; }),
     toggleRow('pet-work', '工作状态联动', '跟随会话状态切换动画与气泡，不调用模型。', pet.workStatusEnabled !== false, (value) => { pet.workStatusEnabled = value; }),
     toggleRow('pet-fixed', '固定不动', '开启后随机链不再抽转向与移动；手动点播与拖拽照常。', pet.fixedEnabled === true, (value) => { pet.fixedEnabled = value; }),
-    make('div', { class: 'field' }, [
-      make('label', { for: 'pet-persona', text: '这只的人设（可选）' }),
-      personaWrap(pet),
-      make('p', { class: 'fieldHint', text: personaHint() }),
-      make('p', { class: 'fieldHint', text: '发给模型的 system = 这段 + 自动追加的名字与时间背景，别在这里重复写。' }),
-    ]),
   ];
   return card('宠物', '这里编辑的是 ' + (state.entry === 'main' ? '默认条目' : state.entry) + ' 的实例；改动在点保存后写盘。', children);
-}
-
-/** 条目人设提示：占位符里放的就是条目人设正文，这里只说规则。 */
-function personaHint() {
-  if (state.prompts[state.entry]) return '留空 = 跟随所属条目的人设，输入框里的灰色文字就是那份内容。';
-  return '这个条目还没写人设；留空表示这只宠物没有系统提示词。';
-}
-
-/** 人设输入框连同右下角的字数统计；占位符用条目人设全文。 */
-function personaWrap(pet) {
-  const wrap = make('div', { class: 'personaWrap' });
-  const area = make('textarea', { id: 'pet-persona' });
-  area.value = typeof pet.whisperPrompt === 'string' ? pet.whisperPrompt : '';
-  area.maxLength = 4000;
-  area.rows = 4;
-  const entryPrompt = state.prompts[state.entry] || '';
-  area.placeholder = entryPrompt || '留空则没有系统提示词';
-  const count = make('span', { class: 'personaCount', text: area.value.length + ' 字' });
-  area.addEventListener('input', () => {
-    const text = area.value.trim();
-    if (text) pet.whisperPrompt = area.value;
-    else delete pet.whisperPrompt;
-    count.textContent = area.value.length + ' 字';
-    markDirty(true);
-  });
-  wrap.append(area, count);
-  return wrap;
 }
 `;
 }

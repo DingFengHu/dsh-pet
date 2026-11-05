@@ -8,10 +8,7 @@
  */
 import type { RouteResult } from '../http.ts';
 import { handleAssetsRoutes } from './assets.ts';
-import { handleAttachmentRoutes } from './attachment.ts';
 import { handleAvatarRoutes } from './avatar.ts';
-import { handleBalanceRoutes } from './balance.ts';
-import { handleChatRoutes } from './chat.ts';
 import { handleConfigRoutes } from './config/index.ts';
 import { handleDesktopRoutes } from './desktop.ts';
 import { handleInteractionRoutes } from './interaction.ts';
@@ -20,7 +17,6 @@ import { handleMotionRoutes } from './motion.ts';
 import { handlePlaybackRoutes } from './playback.ts';
 import { handleSessionRoutes } from './session.ts';
 import { handleStateRoutes } from './state.ts';
-import { handleSleepRoutes } from './sleep.ts';
 import { handleTodoRoutes } from './todos.ts';
 import { handleVoiceRoutes } from './voice.ts';
 import type { PetRouteDeps, RouteHandler } from './types.ts';
@@ -32,39 +28,14 @@ const HANDLERS: readonly RouteHandler[] = [
   handleMenuRoutes,
   handleStateRoutes,
   handleSessionRoutes,
-  handleBalanceRoutes,
   handleInteractionRoutes,
   handleMotionRoutes,
   handlePlaybackRoutes,
-  handleSleepRoutes,
-  handleChatRoutes,
-  handleAttachmentRoutes,
   handleTodoRoutes,
   handleVoiceRoutes,
   handleAvatarRoutes,
   handleAssetsRoutes,
 ];
-
-/**
- * 睡觉期间要拒绝的端点：只列「打扰类」。
- *
- * 刻意用白名单而不是黑名单——新增端点默认放行，不会因为忘了排除而把维护动作（改显示位置、
- * 重载配置）或拖拽链路（/position、/throw）一起锁死；反过来，漏列一个打扰端点只是它还能用，
- * 不会造成「宠物叫不醒」。
- */
-function sleepGated(rest: string, method: string): boolean {
-  if (rest === 'chat') return method === 'POST';
-  if (rest === 'todos') return method === 'POST' || method === 'DELETE';
-  return (
-    rest === 'anim' ||
-    rest === 'whisper' ||
-    rest === 'balance' ||
-    rest === 'broadcast' ||
-    rest === 'bubble/clear' ||
-    rest === 'menu/click' ||
-    rest === 'voice'
-  );
-}
 
 /**
  * 由依赖表构造路由分发器（`apply` 只调一次）。
@@ -75,15 +46,6 @@ export function createPetRouter(
   deps: PetRouteDeps,
 ): (url: URL, rest: string, method: string, body?: string, signal?: AbortSignal) => Promise<RouteResult> {
   return async (url, rest, method, body, signal) => {
-    // 睡觉闸门放在分发之前：各领域处理器完全不用知道「睡觉」这回事，也不会漏掉某一处。
-    // 只挡带 ?pet= 的请求（/todos 的清单是全局的，没有归属宠物就不拦）。
-    if (sleepGated(rest, method)) {
-      const petId = String(url.searchParams.get('pet') ?? '').trim();
-      if (petId) {
-        const blocked = deps.sleepBlocked(petId, url.searchParams);
-        if (blocked) return blocked;
-      }
-    }
     for (const handle of HANDLERS) {
       const result = await handle(deps, { url, rest, method, body, signal });
       if (result !== undefined) return result;

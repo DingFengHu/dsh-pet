@@ -1,11 +1,10 @@
 /**
- * 气泡单槽：余额、说话、工作状态三种气泡的显隐、停留计时与优先级选择。
+ * 气泡单槽：待办、说话、工作状态气泡的显隐、停留计时与优先级选择。
  * 不负责何时点亮与动画联动：tick 判定、抽动画、打日志都在 PetCard；也不负责外观，哑组件在 client/bubble.ts。
  * 依赖注入的 react 与两个气泡组件；三个停留计时器都归本模块清理。
  * 不变量：同一时刻只渲染一个气泡，优先级依次为终态任务、说话、余额、非终态任务。
  * @module dsh-pet/src/client/pet/card/bubble-slots
  */
-import { balancePageCount as balancePageCountOf, type BalanceState } from '../../../shared/balance/index.ts';
 import {
   BUBBLE_HOLD_IDLE,
   reduceBubbleHold,
@@ -19,7 +18,7 @@ import type * as ReactNS from 'react';
 import type { jsx } from 'react/jsx-runtime';
 
 /** 当前该挂哪个气泡；`none` 表示哪个条件都不成立。 */
-export type BubbleSlot = 'todo' | 'work-terminal' | 'whisper' | 'balance' | 'work' | 'none';
+export type BubbleSlot = 'todo' | 'work-terminal' | 'whisper' | 'work' | 'none';
 
 /** 优先级判定的输入：全部是渲染期的既成事实，判定本身不产生副作用。 */
 export interface BubbleSlotInput {
@@ -37,14 +36,6 @@ export interface BubbleSlotInput {
   whisperOn: boolean;
   /** 说话气泡文本。 */
   whisperText: string | null;
-  /** 余额气泡是否点亮。 */
-  balanceOn: boolean;
-  /** 余额数据是否已拉到；null 表示尚未拉到。 */
-  balanceAvailable: boolean;
-  /** 配置是否启用余额。 */
-  balanceEnabled: boolean;
-  /** 本次余额是否手动请求；手动请求不受开关门控。 */
-  balanceManual: boolean;
 }
 
 /**
@@ -52,7 +43,7 @@ export interface BubbleSlotInput {
  *
  * 终态任务只活 10s，所以不让位；非终态常驻，让位 10s 没有损失。
  *
- * @param input - 三种气泡的显隐与开关。
+ * @param input - 各气泡的显隐与开关。
  * @returns 命中的槽位；都不成立时为 `none`。
  */
 export function decideBubbleSlot(input: BubbleSlotInput): BubbleSlot {
@@ -60,30 +51,9 @@ export function decideBubbleSlot(input: BubbleSlotInput): BubbleSlot {
   if (input.todoOn) return 'todo';
   if (input.workTerminal && input.workOn && input.workText && input.workStatusEnabled) return 'work-terminal';
   if (input.whisperOn && input.whisperText) return 'whisper';
-  if (input.balanceOn && input.balanceAvailable && (input.balanceEnabled || input.balanceManual)) return 'balance';
   if (input.workOn && input.workText && input.workStatusEnabled) return 'work';
   return 'none';
 }
-
-/**
- * 余额气泡的可翻页数。
- *
- * 页数规则归 shared（与每页内容同源），这里只补一个「还没有结果」的兜底。
- *
- * @param balance - 最近一次余额结果；`null` 表示这一拍还没有数据。
- * @returns 页数，至少 1。
- */
-export function balancePageCount(balance: BalanceState | null): number {
-  return balance ? balancePageCountOf(balance) : 1;
-}
-
-/** 余额气泡组件；props 与 `client/bubble.ts` 的 BalanceBubble 一致。 */
-export type BalanceBubbleComponent = (props: {
-  state: BalanceState;
-  on: boolean;
-  index: number;
-  onCycle: () => void;
-}) => ReactNode;
 
 /** 说话气泡组件；配图二选一，props 与 `client/bubble.ts` 的 WhisperBubble 一致。 */
 export type WhisperBubbleComponent = (props: {
@@ -111,10 +81,8 @@ export interface BubbleSlotsRuntime {
 /** 待办面板气泡组件；props 与 `client/todo-bubble.ts` 的 TodoBubble 一致。 */
 export type TodoBubbleComponent = (props: { on: boolean; onClose: () => void }) => ReactNode;
 
-/** 三种气泡组件。 */
+/** 气泡组件。 */
 export interface BubbleComponents {
-  /** 余额气泡。 */
-  balanceBubble: BalanceBubbleComponent;
   /** 待办面板气泡。 */
   todoBubble: TodoBubbleComponent;
   /** 说话气泡。 */
@@ -123,12 +91,6 @@ export interface BubbleComponents {
 
 /** 每次渲染由 PetCard 提供的视图输入。 */
 export interface BubbleSlotsInput {
-  /** 最近一次余额结果。 */
-  balance: BalanceState | null;
-  /** 配置是否启用余额。 */
-  balanceEnabled: boolean;
-  /** 本次余额是否手动请求。 */
-  balanceManual: boolean;
   /** 配置是否启用工作状态联动。 */
   workStatusEnabled: boolean;
   /** 工作状态是否处于终态。 */
@@ -143,10 +105,6 @@ export interface BubbleSlotsInput {
 
 /** 气泡单槽对外的读写面。 */
 export interface BubbleSlots {
-  /** 点亮余额气泡并回到第一页，重置停留计时。 */
-  showBalance(): void;
-  /** 点余额气泡翻页，并重置停留计时。 */
-  cycleBalance(): void;
   /** 点亮说话气泡；duration 为 0 时不改动当前气泡，undefined 用默认时长。 */
   showWhisper(text: string, parts: { image?: string; url?: string }, duration?: number): void;
   /** 收起说话气泡；不碰动画与另两种气泡。 */
@@ -173,20 +131,15 @@ export interface BubbleSlots {
  * 制造气泡单槽的 hook，每个 PetCard 调一次。
  *
  * @param rt - 注入的 react 能力。
- * @param components - 余额与说话气泡组件。
+ * @param components - 待办与说话气泡组件。
  * @returns 接收视图输入的 hook；钩子内部的状态与计时器随卡片卸载一并清理。
  */
 export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComponents) {
   const { h, useState, useRef, useEffect } = rt;
-  const BalanceBubble = components.balanceBubble;
   const TodoBubble = components.todoBubble;
   const WhisperBubble = components.whisperBubble;
 
   return function useBubbleSlots(input: BubbleSlotsInput): BubbleSlots {
-    // 余额气泡：显隐与展开页。
-    const [balanceOn, setBalanceOn] = useState(false);
-    const [balancePage, setBalancePage] = useState(0);
-    const balanceTimerRef = useRef<number | null>(null);
     // 说话气泡：显隐、文本与配图（池内名与完整地址二选一）。收起时机在 bubbleHoldRef：
     // 语音合成期间挂起计时，播完再留一小段尾巴（见 shared/bubble-hold）。
     const [whisperOn, setWhisperOn] = useState(false);
@@ -208,34 +161,14 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     // 订阅是模块级单例：卸载时必须退订，否则旧卡片会被后续状态推送重渲染
     useEffect(() => subscribeVoiceState(setVoiceState), []);
 
-    // 卸载后不再 setState：三个计时器都在这里清。
+    // 卸载后不再 setState：计时器都在这里清。
     useEffect(
       () => () => {
-        if (balanceTimerRef.current !== null) window.clearTimeout(balanceTimerRef.current);
         if (whisperTimerRef.current !== null) window.clearTimeout(whisperTimerRef.current);
         if (workTimerRef.current !== null) window.clearTimeout(workTimerRef.current);
       },
       [],
     );
-
-    /** 重置余额气泡的停留计时；重复触发先清旧定时器，否则旧的会提前收起。 */
-    const armBalanceTimeout = () => {
-      if (balanceTimerRef.current !== null) window.clearTimeout(balanceTimerRef.current);
-      balanceTimerRef.current = window.setTimeout(() => setBalanceOn(false), BUBBLE_DURATION_MS);
-    };
-
-    const showBalance = () => {
-      setBalancePage(0); // 新一轮查询从第一页开始。
-      setBalanceOn(true);
-      armBalanceTimeout();
-    };
-
-    const cycleBalance = () => {
-      const pages = balancePageCount(input.balance);
-      setBalancePage((page) => (page + 1) % pages);
-      // 重新计时：第 8 秒点开才剩 2 秒，看不清下一页。
-      armBalanceTimeout();
-    };
 
     /** 推进说话气泡的收起计划，并按新计划重排计时器。 */
     const applyWhisperHold = (event: BubbleHoldEvent): void => {
@@ -311,17 +244,8 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
         workStatusEnabled: input.workStatusEnabled,
         whisperOn,
         whisperText,
-        balanceOn,
-        balanceAvailable: input.balance !== null,
-        balanceEnabled: input.balanceEnabled,
-        balanceManual: input.balanceManual,
       });
       if (slot === 'todo') return h(TodoBubble, { on: todoOn, onClose: hideTodo });
-      if (slot === 'balance') {
-        return input.balance === null
-          ? null
-          : h(BalanceBubble, { state: input.balance, on: balanceOn, index: balancePage, onCycle: cycleBalance });
-      }
       if (slot === 'whisper') {
         return whisperText === null
           ? null
@@ -352,13 +276,11 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
 
     return {
       clearWhisper,
-      cycleBalance,
       hideTodo,
       hideWork,
       lightWork,
       node,
       resetWork,
-      showBalance,
       showTodo,
       showWhisper,
       toggleTodo,

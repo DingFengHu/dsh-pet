@@ -6,26 +6,17 @@
  */
 import { FONT_PRESETS, FONT_SIZE_MAX, FONT_SIZE_MIN } from '../../../shared/fonts.ts';
 import { isValidSizePercent } from '../../../shared/pet-size.ts';
-import type { FontConfig, ModelSelection, Pet, PhysicsParams } from '../../../shared/types.ts';
+import type { FontConfig, Pet, PhysicsParams } from '../../../shared/types.ts';
 
 /** 校验失败时返回的文案键。 */
-export type InvalidKey =
-  'invalid' | 'invalidPhysics' | 'invalidModel' | 'invalidChatMemory' | 'invalidChatImageLimit' | 'invalidFont';
+export type InvalidKey = 'invalid' | 'invalidPhysics' | 'invalidFont';
 
 /** 保存前要校验的全部表单值。 */
 export interface FormValues {
   pets: readonly Pet[];
   physics: PhysicsParams;
-  whisperModel: ModelSelection;
-  chatModel: ModelSelection;
-  chatMemory: number;
-  chatImageLimit: number;
   font: FontConfig;
 }
-
-/** 一处「服务商 + 模型」是否合法：要么都留空（跟随当前对话），要么都非空。 */
-export const modelPairValid = (model: ModelSelection): boolean =>
-  (model.provider.trim() === '') === (model.model.trim() === '');
 
 /** 宠物：宽度必须为正数、百分比缺省或是不小于 1 的数字、两个偏移必须是有限数（负数合法，宠物可以压出屏外）。 */
 const petValid = (pet: Pet): boolean =>
@@ -63,11 +54,6 @@ const fontValid = (font: FontConfig): boolean =>
 export function validateForm(values: FormValues): InvalidKey | null {
   if (!values.pets.every(petValid)) return 'invalid';
   if (!physicsValid(values.physics)) return 'invalidPhysics';
-  // 只填一半（选了服务商没选模型，或反之）非法。
-  if (!modelPairValid(values.whisperModel) || !modelPairValid(values.chatModel)) return 'invalidModel';
-  if (!Number.isFinite(values.chatMemory) || values.chatMemory < 0) return 'invalidChatMemory';
-  // 0 = 不限制，合法。
-  if (!Number.isFinite(values.chatImageLimit) || values.chatImageLimit < 0) return 'invalidChatImageLimit';
   if (!fontValid(values.font)) return 'invalidFont';
   return null;
 }

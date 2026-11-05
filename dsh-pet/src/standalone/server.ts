@@ -7,5 +7,4 @@
  */
 export { DEFAULT_STANDALONE_PORT, PORT_SCAN_LIMIT } from './server/options.ts';
 export type { StandaloneServer, StandaloneServerOptions } from './server/options.ts';
-export { balanceHandler, modelsHandler, settingsHandler, testHandler } from './server/handlers.ts';
 export { createRequestListener, listenStandaloneServer } from './server/listener.ts';

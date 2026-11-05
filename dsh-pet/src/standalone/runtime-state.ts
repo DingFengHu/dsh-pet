@@ -8,7 +8,7 @@
 import { mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { writePrivateJson } from './ai-storage.ts';
+import { writePrivateJson } from './private-file.ts';
 
 /** 运行状态内容；token 只交给本机启动器。 */
 interface RuntimeDetails {

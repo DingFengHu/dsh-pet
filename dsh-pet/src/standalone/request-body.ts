@@ -11,8 +11,6 @@ import { rejectRequest } from './request-security.ts';
 
 /** 普通请求的字节上限。 */
 export const MAX_REQUEST_BYTES = 1024 * 1024;
-/** 设置提交的字节上限，比普通请求更紧。 */
-export const MAX_SETTINGS_BYTES = 16 * 1024;
 /** 单次读取的默认时限。 */
 export const BODY_TIMEOUT_MS = 5000;
 

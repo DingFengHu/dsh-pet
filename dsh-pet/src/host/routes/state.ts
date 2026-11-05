@@ -1,5 +1,5 @@
 /**
- * 轮询侧数据：/models 模型目录、/state 全局快照（支持 since/timeout 长轮询）、/work-status 工作状态写入。
+ * 轮询侧数据：/state 全局快照（支持 since/timeout 长轮询）、/work-status 工作状态写入。
  *
  * 不生成状态，只汇总 store 里的当前值。
  * 依赖（PetRouteDeps）显式传入，模块内不读全局、不建状态。
@@ -13,51 +13,8 @@ import { failResult, invalidJson, methodNotAllowed, okResult, payloadTooLarge } 
 
 /** 轮询状态领域：未命中返回 undefined，命中返回应答。 */
 export async function handleStateRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
-  const { EXTERNAL_WORK_SESSION, ctx, nextExternalWorkSeq, publishWorkStatus, state, workStatus } = deps;
+  const { EXTERNAL_WORK_SESSION, nextExternalWorkSeq, publishWorkStatus, state, workStatus } = deps;
   const { body, method, rest, signal, url } = input;
-
-  // 可选模型清单（设置页「AI 模型」下拉框数据源）：与 DSH 模型选择器同源，都来自宿主 llm 服务。
-  // 只读、无副作用；某个服务商列模型失败（适配器不支持 / 网络）只让它空着，不拖垮整张清单。
-  // 一个实时路由都没注册时回落到 listConfigurableProviders，免得下拉框空着。
-  if (rest === 'models') {
-    if (method !== 'GET') return methodNotAllowed();
-    try {
-      const llm = ctx.llm as
-        | {
-            listProviders?: () => Array<{ id?: unknown; name?: unknown }>;
-            listConfigurableProviders?: () => Array<{ provider?: unknown; displayName?: unknown }>;
-            listModels?: (provider: string) => Promise<Array<{ id?: unknown; name?: unknown }>>;
-          }
-        | undefined;
-      const named = (id: unknown, name: unknown): { id: string; name: string } => {
-        const pid = String(id ?? '');
-        return { id: pid, name: String(name ?? '') || pid };
-      };
-      let providers = (typeof llm?.listProviders === 'function' ? llm.listProviders() : []).map((p) =>
-        named(p?.id, p?.name),
-      );
-      if (providers.length === 0 && typeof llm?.listConfigurableProviders === 'function') {
-        providers = llm.listConfigurableProviders().map((p) => named(p?.provider, p?.displayName));
-      }
-      providers = providers.filter((p) => p.id);
-      const catalog = await Promise.all(
-        providers.map(async (p) => {
-          let models: Array<{ id: string; name: string }> = [];
-          try {
-            const list = await llm?.listModels?.(p.id);
-            models = (Array.isArray(list) ? list : []).map((m) => named(m?.id, m?.name)).filter((m) => m.id);
-          } catch {
-            /* 单个服务商列不出模型：留空即可（下拉框里该服务商只有「跟随当前对话」可选） */
-          }
-          return { ...p, models };
-        }),
-      );
-      return okResult({ providers: catalog });
-    } catch (e) {
-      // 模型目录取不到是依赖不可用（宿主没提供 llm 适配器 / 全部列模型失败），不是传输层故障
-      return failResult('generate-error', e instanceof Error ? e.message : String(e));
-    }
-  }
 
   // 轮询状态（/state，GET，no-cache）是前端轮询的唯一数据源：只读、纯内存、零副作用——
   // 在这里触发外部调用或模型生成会把所有人的轮询拖死；也不碰磁盘（配置变更信号走 sections.config）。

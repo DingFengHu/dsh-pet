@@ -9,7 +9,7 @@ import { ROUTE_PATH } from '../shared/constants.ts';
 import { avatarUrl } from '../shared/avatar.ts';
 import { DEFAULT_FONT } from '../shared/fonts.ts';
 import { DEFAULT_PHYSICS } from '../shared/physics.ts';
-import type { FontConfig, ModelSelection, PhysicsParams, Weights } from '../shared/types.ts';
+import type { FontConfig, PhysicsParams, Weights } from '../shared/types.ts';
 import type { FunctionComponent } from 'react';
 import { requestNotificationPermission } from './notify.ts';
 import { injectSettingsCss } from './settings/css.ts';
@@ -20,10 +20,8 @@ import { type DialogState, makeDialog } from './settings/dialog.ts';
 import { makeFontCard } from './settings/font-card.ts';
 import { makeGlobalCard, type GlobalFlagKey, type GlobalFlags } from './settings/global-card.ts';
 import { makeLoadStatus } from './settings/load-status.ts';
-import { makeModelCard, type ChatFlagKey, type ChatFlagValues, type ModelFieldKey } from './settings/model-card.ts';
 import { makeMobileCard } from './settings/mobile-card.ts';
 import { makeMotionCard } from './settings/motion-card.ts';
-import { makeModelPicker } from './settings/picker/index.ts';
 import { makeVoicePicker } from './settings/picker/voice-picker.ts';
 import { runNotificationTest } from './settings/notify-test.ts';
 import { makeKindTabs } from './settings/kind-tabs.ts';
@@ -35,7 +33,6 @@ import { createWriteFlow } from './settings/config/index.ts';
 import { makePhysicsCard } from './settings/physics-card.ts';
 import { makeShortcutsCard } from './settings/shortcuts-card.ts';
 import { attachTipLayer } from './settings/tip-layer.ts';
-import type { ShortcutHost } from './app-shortcut.ts';
 import type { SettingsRuntime } from './settings/runtime.ts';
 import { useConfigLoad } from './settings/config/index.ts';
 import { usePetList } from './settings/use-pet-list.ts';
@@ -54,13 +51,9 @@ export { petBridge };
  * 浏览器半侧是 `__ModuleLoader__` 单文件形态，react 能力只能由宿主在运行时注入，
  * 因此以工厂接收依赖，造出组件后再注册进设置页插槽。
  * @param rt - 运行时注入的依赖：`h`、hooks 与翻译函数 `t`。
- * @param ctx - 客户端上下文：只用于读用户改绑后的快捷键键位。
  * @returns 设置页组件；`close` 由设置页外壳提供，本页未使用。
  */
-export function makePetConfigSection(
-  rt: SettingsRuntime,
-  ctx: ShortcutHost,
-): FunctionComponent<{ close?: () => void }> {
+export function makePetConfigSection(rt: SettingsRuntime): FunctionComponent<{ close?: () => void }> {
   const { h, useState, useEffect, useRef, useCallback, t } = rt;
 
   // 样式注入幂等，重复渲染不会重复插入。
@@ -70,7 +63,6 @@ export function makePetConfigSection(
 
   // 卡片在 settings/ 里各自成文件，这里只造一次实例：组件类型必须跨渲染稳定，
   // 否则选择器的浮层状态（打开 / 搜索词 / 高亮）每次渲染都会丢。
-  const ModelPicker = makeModelPicker({ h, useState, useEffect, useRef, t });
   const VoicePicker = makeVoicePicker({ h, useState, useEffect, useRef });
   const PetTabs = makePetTabs({ h, t });
   const KindTabs = makeKindTabs({ h, t });
@@ -78,10 +70,9 @@ export function makePetConfigSection(
   const GlobalCard = makeGlobalCard(rt);
   const VoiceCard = makeVoiceCard(rt, VoicePicker);
   const FontCard = makeFontCard(rt);
-  const ModelCard = makeModelCard(rt, ModelPicker);
   const PhysicsCard = makePhysicsCard(rt);
   const MotionCard = makeMotionCard(rt);
-  const ShortcutsCard = makeShortcutsCard(rt, ctx);
+  const ShortcutsCard = makeShortcutsCard(rt);
   const MobileCard = makeMobileCard(rt);
   const Actions = makeActions(rt);
   const { ConfigMetaCard, StorageCard } = makePathsCards(rt);
@@ -115,8 +106,8 @@ export function makePetConfigSection(
       replace,
       packWrites,
     } = usePetList(rt, setDialog);
-    // 一次性拉取的宿主数据：落盘位置（两张路径卡）与候选模型清单（下拉框）。
-    const { paths, catalog, catalogFailed } = useRemoteData(rt);
+    // 一次性拉取的宿主数据：落盘位置（两张路径卡）。
+    const { paths } = useRemoteData(rt);
 
     // 说明气泡：挂 body 摆位（伪元素会被窗口边缘与滚动容器裁掉），随页面卸载一起拆。
     useEffect(() => attachTipLayer(), []);
@@ -141,11 +132,6 @@ export function makePetConfigSection(
     const [notifyEnabled, setNotifyEnabled] = useState(true);
     // 点击音效开关：同通知开关，随「保存」整包写入；初值 true 是内置默认，加载效应会用成品值覆盖。
     const [clickSound, setClickSound] = useState(true);
-    // 表情包配图开关（全局）：切换只改本地状态，随「保存」一起提交。
-    const [whisperImage, setWhisperImage] = useState(false);
-    const [chatImage, setChatImage] = useState(false);
-    // 对话动作联动开关（全局）：同上，随「保存」一起提交；初值仅占位，加载成功后由成品值覆盖。
-    const [chatAnimation, setChatAnimation] = useState(true);
     // 抛掷锁定开关（全局）：切换只改本地状态，随「保存」一起提交。
     const [confineScreen, setConfineScreen] = useState(false);
     // 系统托盘开关（全局）：随「保存」一起提交；宿主半侧据此决定建不建托盘、没桌面宠物时还值不值得常驻 Helper。
@@ -155,8 +141,7 @@ export function makePetConfigSection(
     const [voiceName, setVoiceName] = useState('zh-CN-XiaoyiNeural');
     // 播放音量（全局系数 0–1）：初值 1 是内置默认（最大音量），加载后由成品值覆盖。
     const [voiceVolume, setVoiceVolume] = useState(1);
-    // 语音的两个细分开关（周期碎碎念 / 待办提醒）：与总开关同一套语义，初值 false 是内置默认。
-    const [voiceWhisperEnabled, setVoiceWhisperEnabled] = useState(false);
+    // 语音的细分开关（待办提醒）：与总开关同一套语义，初值 false 是内置默认。
     const [voiceTodoEnabled, setVoiceTodoEnabled] = useState(false);
     // 可选音色：来自宿主 /voice/voices，拉不到就留空——下拉只显示当前值，绝不硬编码音色 id。
     const [voiceOptions, setVoiceOptions] = useState<VoiceOption[]>([]);
@@ -166,13 +151,6 @@ export function makePetConfigSection(
     const [font, setFont] = useState<FontConfig>({ ...DEFAULT_FONT });
     // 动作频率权重（main 条目）：三项合计 ≤ 100，随机动作是余量；随「保存」整包写入。
     const [weights, setWeights] = useState<Weights>({ ...DEFAULT_WEIGHTS });
-    // AI 模型（条目级）：碎碎念 / 对话各自的服务商与模型，两者都留空 = 跟随当前对话；随「保存」整包写入。
-    const [whisperModel, setWhisperModel] = useState<ModelSelection>({ provider: '', model: '' });
-    const [chatModel, setChatModel] = useState<ModelSelection>({ provider: '', model: '' });
-    // 对话历史条数（全局默认）：初值 10 是内置默认，加载效应会用成品 main.chatMemoryRounds 覆盖。
-    const [chatMemory, setChatMemory] = useState(10);
-    // 对话配图张数上限（全局默认）：初值 20 是内置默认，加载后由成品值覆盖。
-    const [chatImageLimit, setChatImageLimit] = useState(20);
     // 头像预览的破缓存版本号：上传成功后换一个，预览才会重新取图（同一 URL 会被浏览器记住）。
     const [avatarVersion, setAvatarVersion] = useState(Date.now());
     // 头像上传中：按钮禁用并换文案，与「保存」的 busy 分开——上传不写配置。
@@ -188,23 +166,15 @@ export function makePetConfigSection(
         replace(entries);
         if (patch.notificationsEnabled !== undefined) setNotifyEnabled(patch.notificationsEnabled);
         if (patch.clickSoundEnabled !== undefined) setClickSound(patch.clickSoundEnabled);
-        if (patch.whisperImageEnabled !== undefined) setWhisperImage(patch.whisperImageEnabled);
-        if (patch.chatImageEnabled !== undefined) setChatImage(patch.chatImageEnabled);
-        if (patch.chatAnimationEnabled !== undefined) setChatAnimation(patch.chatAnimationEnabled);
         if (patch.confineToScreen !== undefined) setConfineScreen(patch.confineToScreen);
         if (patch.trayEnabled !== undefined) setTrayEnabled(patch.trayEnabled);
         if (patch.voiceEnabled !== undefined) setVoiceEnabled(patch.voiceEnabled);
         if (patch.voiceName !== undefined) setVoiceName(patch.voiceName);
         if (patch.voiceVolume !== undefined) setVoiceVolume(patch.voiceVolume);
-        if (patch.voiceWhisperEnabled !== undefined) setVoiceWhisperEnabled(patch.voiceWhisperEnabled);
         if (patch.voiceTodoEnabled !== undefined) setVoiceTodoEnabled(patch.voiceTodoEnabled);
         if (patch.physics !== undefined) setPhysics(patch.physics);
         if (patch.font !== undefined) setFont(patch.font);
         if (patch.animationWeights !== undefined) setWeights(patch.animationWeights);
-        if (patch.whisperModel !== undefined) setWhisperModel(patch.whisperModel);
-        if (patch.chatModel !== undefined) setChatModel(patch.chatModel);
-        if (patch.chatMemoryRounds !== undefined) setChatMemory(patch.chatMemoryRounds);
-        if (patch.chatImageLimit !== undefined) setChatImageLimit(patch.chatImageLimit);
       },
       [replace],
     );
@@ -262,35 +232,19 @@ export function makePetConfigSection(
       confineToScreen: confineScreen,
       trayEnabled,
     };
-    const chatFlags: ChatFlagValues = {
-      whisperImageEnabled: whisperImage,
-      chatImageEnabled: chatImage,
-      chatAnimationEnabled: chatAnimation,
-    };
 
     // 通知开关要借用户手势申请权限，其余六个是纯 setState；统一成「键名 → setter」的查表，避免长 switch。
-    // 两束开关共用这张表：键名到 setter 的映射只写一遍，卡片只管回传键名。
-    const flagSetters: Record<GlobalFlagKey | ChatFlagKey, (value: boolean) => void> = {
+    const flagSetters: Record<GlobalFlagKey, (value: boolean) => void> = {
       notificationsEnabled: (value) => void toggleNotify(value),
       clickSoundEnabled: setClickSound,
       confineToScreen: setConfineScreen,
       trayEnabled: setTrayEnabled,
-      whisperImageEnabled: setWhisperImage,
-      chatImageEnabled: setChatImage,
-      chatAnimationEnabled: setChatAnimation,
     };
     const setGlobalFlag = (key: GlobalFlagKey, value: boolean): void => flagSetters[key](value);
-    const setChatFlag = (key: ChatFlagKey, value: boolean): void => flagSetters[key](value);
 
     /** 局部补丁写入：字体与物理参数都是「整段对象 + 改几个字段」。 */
     const patchFont = (patch: Partial<FontConfig>): void => setFont((current) => ({ ...current, ...patch }));
     const patchPhysics = (patch: Partial<PhysicsParams>): void => setPhysics((current) => ({ ...current, ...patch }));
-
-    /** 两个模型字段各有一份状态，卡片只回传键名。 */
-    const setModel = (key: ModelFieldKey, value: ModelSelection): void => {
-      if (key === 'whisperModel') setWhisperModel(value);
-      else setChatModel(value);
-    };
 
     // 写路径在 settings/write-flow.ts：保存、请求同步与「确认」派发都走同一条校验与落盘。
     // 传的是回调而不是值——save 每次渲染重建，捕获状态会拿旧值存盘。
@@ -300,21 +254,13 @@ export function makePetConfigSection(
         pets: mainPets,
         notificationsEnabled: notifyEnabled,
         clickSoundEnabled: clickSound,
-        whisperImageEnabled: whisperImage,
-        chatImageEnabled: chatImage,
-        chatAnimationEnabled: chatAnimation,
         confineToScreen: confineScreen,
         trayEnabled,
         voiceEnabled,
         voiceName,
         voiceVolume,
-        voiceWhisperEnabled,
         voiceTodoEnabled,
         physics,
-        whisperModel,
-        chatModel,
-        chatMemoryRounds: chatMemory,
-        chatImageLimit,
         font,
         animationWeights: weights,
       }),
@@ -392,29 +338,13 @@ export function makePetConfigSection(
           voiceName,
           volume: voiceVolume,
           voices: voiceOptions,
-          whisperEnabled: voiceWhisperEnabled,
           todoEnabled: voiceTodoEnabled,
           onToggle: setVoiceEnabled,
           onVoiceChange: setVoiceName,
           onVolumeChange: setVoiceVolume,
-          onWhisperToggle: setVoiceWhisperEnabled,
           onTodoToggle: setVoiceTodoEnabled,
         }),
         h(FontCard, { busy, font, onChange: patchFont }),
-        h(ModelCard, {
-          busy,
-          catalog,
-          failed: catalogFailed,
-          whisperModel,
-          chatModel,
-          onModelChange: setModel,
-          chatMemory,
-          chatImageLimit,
-          onChatMemoryChange: setChatMemory,
-          onChatImageLimitChange: setChatImageLimit,
-          values: chatFlags,
-          onFlagChange: setChatFlag,
-        }),
         h(PhysicsCard, { busy, physics, onChange: patchPhysics }),
         h(MotionCard, { busy, weights, onChange: setWeights }),
         h(MobileCard, { busy, physics, onChange: patchPhysics }),

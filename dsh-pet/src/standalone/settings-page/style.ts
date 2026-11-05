@@ -6,8 +6,6 @@
  * 不内联样式、不引 CDN：页面 CSP 是 default-src 'none'。
  * @module dsh-pet/src/standalone/settings-page/style
  */
-import { PANEL_CSS } from '../../client/chat/panel-css.ts';
-
 /** 设置页样式表。 */
 export const settingsStyle = `:root{
   color-scheme:light;
@@ -69,8 +67,6 @@ a{color:var(--dsw-static-blue-500)}
 .panel{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden}
 .scroll{flex:1;min-height:0;overflow-y:auto;padding:22px 30px 4px}
 .scroll>*{width:100%;max-width:var(--dsh-content-width);margin-left:auto;margin-right:auto}
-/* 对话面板自己管内边距与滚动，这里只负责给它一个确定高度的容器；宽度与配置页对齐。 */
-.pet-chat-host{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden;width:100%;max-width:var(--dsh-content-width);margin-left:auto;margin-right:auto}
 .card{background:var(--dsw-alias-settings-card-fill);border:1px solid var(--dsw-alias-settings-card-stroke);border-radius:var(--dsw-radius-lg);padding:18px 20px;margin-bottom:14px}
 .card:first-child{margin-top:2px}
 .cardHead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 4px}
@@ -82,8 +78,6 @@ a{color:var(--dsw-static-blue-500)}
 input[type=text],input[type=url],input[type=password],input[type=number],select,textarea{display:block;width:100%;min-height:36px;padding:7px 10px;border:1px solid var(--dsw-alias-border-l4);border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px}
 textarea{min-height:72px;resize:vertical;line-height:1.6}
 input:hover,select:hover,textarea:hover{border-color:var(--dsw-static-neutral-bluish-300)}
-/* :where() 把元素选择器权重降到 0：对话面板用「外层容器 focus-within 变色」代替逐控件焦点环，
-   保持 input:focus-visible 的 (0,1,1) 会压过面板里的 .pet-chat-input{outline:none}，把焦点环画进输入框。 */
 :where(input,select,textarea,button):focus-visible,.navCell:focus-visible{outline:2px solid var(--dsw-static-blue-500);outline-offset:1px}
 input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neutral-bluish-50);color:var(--dsw-alias-label-tertiary);cursor:not-allowed}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -115,13 +109,6 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .pathValue{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:11.5px}
 .hintInline{font-weight:400;font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .testRow{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
-.combo{position:relative;display:flex;align-items:center}
-.combo input{padding-right:40px}
-.comboToggle{position:absolute;right:4px;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:var(--dsw-radius-xs);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
-.comboToggle:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
-.comboToggle:disabled{opacity:.45;cursor:not-allowed}
-.keyActions{display:flex;justify-content:flex-end;margin-top:8px}
-.keyActions .btn{height:26px;padding:0 10px;font-size:12px}
 .avatarRow{display:flex;align-items:center;gap:12px;margin:0 0 14px}
 .avatarImg{flex:none;width:56px;height:56px;border-radius:var(--dsw-radius-md);border:1px solid var(--dsw-alias-border-l2);object-fit:cover;background:var(--dsw-alias-bg-layer-1)}
 .avatarBox{display:flex;flex-direction:column;gap:6px;min-width:0;align-items:flex-start}
@@ -147,8 +134,6 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .dialogTitle{margin:0 0 8px;font-size:15px;font-weight:600;line-height:22px}
 .dialogText{margin:0;font-size:13px;line-height:1.65;color:var(--dsw-alias-label-secondary);white-space:pre-line;word-break:break-word}
 .dialogActions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-.personaWrap{position:relative}
-.personaCount{position:absolute;right:10px;bottom:8px;padding:2px 5px;border-radius:var(--dsw-radius-xs);background:var(--dsw-alias-bg-layer-2);font-size:11px;line-height:1.2;color:var(--dsw-alias-label-tertiary);pointer-events:none}
 .btn.danger{background:var(--dsw-static-red-500);border-color:transparent;color:#fff}
 .btn.danger:hover{opacity:.9}
 .petBar .select{flex:1;min-width:0}
@@ -167,5 +152,4 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
   .grid2,.grid3{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:no-preference){.navCell,.btn,.tab{transition:background-color .1s ease}}
-${PANEL_CSS}
 `;

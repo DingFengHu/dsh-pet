@@ -7,13 +7,57 @@
  * @module dsh-pet/src/client/settings/avatar-upload
  */
 import { ROUTE_PATH } from '../../shared/constants.ts';
-import { bytesToBase64, loadImage } from '../../shared/chat/encode.ts';
 
 /** 头像长边上限（px）：聊天面板按 28px 显示，512 足够清晰，再大只是白占请求体。 */
 export const AVATAR_MAX_SIDE_PX = 512;
 
 /** 上传结果：成功，或可直接展示给用户的失败文案。 */
 export type AvatarUpload = { ok: true } | { ok: false; message: string };
+
+/**
+ * 把文件解码成 `<img>`。
+ *
+ * 用 `FileReader` 的 data URL 而不是 `URL.createObjectURL`：桌面 helper 的 CSP 是
+ * `img-src 'self' http: https: data:`，不含 `blob:`，objectURL 在那边会被拦成 onerror
+ * （表现为"这个文件解不出图片"，而浏览器端正常）。
+ *
+ * @param file - 用户选中的图片文件。
+ * @returns 解码完成的图片元素。
+ * @throws 文件读不出来或解不出图片时。
+ */
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('这个文件读不出来'));
+    reader.onload = () => {
+      const url = typeof reader.result === 'string' ? reader.result : '';
+      if (!url) {
+        reject(new Error('这个文件读不出来'));
+        return;
+      }
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('这个文件解不出图片'));
+      img.src = url;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * 字节 → 规范 base64（分块，避免 String.fromCharCode 参数过多爆栈）。
+ *
+ * @param bytes - 已读进内存的原始字节。
+ * @returns 不带 data: 前缀的规范 base64。
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK) as unknown as number[]);
+  }
+  return btoa(bin);
+}
 
 /**
  * 把图片文件压进长边上限并转成规范 base64。

@@ -9,9 +9,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths';
-import { listBalanceProviders, registerBalanceProvider } from '../balance/index.ts';
 import { listVoiceProviders, registerVoiceProvider } from '../voice/registry.ts';
-import { listSpeechProviders, registerSpeechProvider } from '../voice/speech-registry.ts';
 import { migrateUserConfig, type ConfigPaths } from '../config.ts';
 import { createFileLogger, isFileLogger, setDefaultLogger, type FileLogger, type LoggerLike } from '../log-file.ts';
 import { MenuRegistry } from '../menu.ts';
@@ -20,7 +18,6 @@ import { PlaybackStore } from '../playback.ts';
 import { resolveAsset } from '../http.ts';
 import { PollStateStore } from '../state.ts';
 import { WorkStatusStore } from '../work-status.ts';
-import type { StandaloneWhisperPolicy } from '../whisper-policy.ts';
 
 /** 装配期需要的宿主上下文：只有 logger / effect / provide 三处能力。 */
 export interface HostSetupContext {
@@ -30,14 +27,6 @@ export interface HostSetupContext {
   effect(setup: () => (() => void) | void, label: string): void;
   /** 对外提供 Cordis 服务。 */
   provide(name: string, value: unknown): void;
-}
-
-/** 独立模式余额查询要用的服务商与密钥（由 standalone 的 standaloneAi 服务提供）。 */
-export interface StandaloneBalanceAuth {
-  /** 设置页选中的余额服务商 id；空串表示未选择。 */
-  provider: string;
-  /** 设置页保存的密钥；空串表示未保存。 */
-  apiKey: string;
 }
 
 /** 装配产物：apply 后续逻辑与路由层共用的对象。 */
@@ -60,10 +49,6 @@ export interface HostSetup {
   readonly memeDirsFor: (assetRoot: string) => string[];
   /** 软取宿主可选服务 */
   readonly optionalService: (name: string) => unknown;
-  /** 独立模式的碎碎念授权策略 */
-  readonly standaloneAiPolicy: () => StandaloneWhisperPolicy | undefined;
-  /** 独立模式的余额凭证；DSH 宿主里是 undefined → 余额走 currentSelection 与 credential store。 */
-  readonly standaloneAiBalance: () => StandaloneBalanceAuth | undefined;
   /** 轮询快照 */
   readonly state: PollStateStore;
   /** 第三方菜单注册表 */
@@ -103,7 +88,7 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
       debugEnabled: process.env.DSH_PET_LOG_DEBUG === '1',
     });
 
-  // 纯模块（./config、./chat、./whisper）拿不到 ctx.logger，用这个默认出口落盘
+  // 纯模块（./config 等）拿不到 ctx.logger，用这个默认出口落盘
   setDefaultLogger(log);
 
   // 只在自己创建时负责收尾：复用的 logger 归 standalone/app 生命周期管，插件卸载不该把它关掉。
@@ -121,23 +106,13 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
    * 软取宿主提供的可选服务（DSH 的 `ctx.get(name, required)` 语义：缺失返回 undefined，不抛）。
    *
    * 不能直接读 `ctx.xxx`：DSH 的 ctx 是严格 getter，读未写进 inject 的服务会抛异常而非返回 undefined
-   * ——独立模式独有的 standaloneAi / shutdownApp 都没进 inject，裸读会让碎碎念 tick 每拍抛错、
+   * ——独立模式独有的 shutdownApp 没进 inject，裸读会让
    * /quit 回 500 而不是 {canQuit:false}。测试里的 fake ctx 没有 get，回落成属性读取即可。
    */
   const optionalService = (name: string): unknown => {
     const get = (ctx as { get?: (n: string, required?: boolean) => unknown }).get;
     if (typeof get === 'function') return get.call(ctx, name, false);
     return (ctx as unknown as Record<string, unknown>)[name];
-  };
-
-  /** 独立模式的碎碎念授权策略（可选能力）：DSH 宿主里是 undefined → 回落到只看 pet.whisperEnabled。 */
-  const standaloneAiPolicy = (): StandaloneWhisperPolicy | undefined =>
-    optionalService('standaloneAi') as StandaloneWhisperPolicy | undefined;
-
-  /** 独立模式的余额凭证（可选能力）：DSH 宿主里是 undefined → 回落到模型服务商与 credential store。 */
-  const standaloneAiBalance = (): StandaloneBalanceAuth | undefined => {
-    const service = optionalService('standaloneAi') as { balanceAuth?: () => StandaloneBalanceAuth } | undefined;
-    return service?.balanceAuth?.();
   };
 
   // 用户主配置（可编辑层）与文件宠物目录；配置读取/合并统一走 readAllConfig（./config）。
@@ -164,7 +139,7 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
   // 用户动画目录（thumb 播放时优先于包内素材；webm 放 main-animation/webm/，mov（macOS 定制）放 main-animation/mov/）
   const thumbUserRoot = join(userRoot, 'main-animation');
 
-  // 用户表情包目录（碎碎念/对话配图的图片：优先于包内 assets/memes，加图不必改包）
+  // 用户表情包目录（气泡配图的图片：优先于包内 assets/memes，加图不必改包）
   const memesUserRoot = join(userRoot, 'memes');
 
   /**
@@ -179,7 +154,7 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
     return [memesUserRoot, PACKAGE_MEMES_DIR];
   };
 
-  // 轮询状态（/state）：前端 1s 轮询的唯一数据源（余额 / 工作状态 / 通知 / 宠物说话）。
+  // 轮询状态（/state）：前端 1s 轮询的唯一数据源（工作状态 / 通知 / 宠物说话）。
   // 所有写入走 state.writeSection / writePet（统一更新 counter）。
   const state = new PollStateStore();
 
@@ -191,20 +166,11 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
   // 只暴露 register（返回注销函数，配合 ctx.effect 在卸载时自动清理）与 list（排障用）；
   // 不暴露 unregister：注销走返回值，避免任何插件都能注销别人的 provider。
   ctx.provide('petApi7340', {
-    balance: {
-      register: registerBalanceProvider,
-      list: listBalanceProviders,
-    },
     // 语音：第三方注册自己的合成实现，非空时合成走它、空则走内置 edge。
     // 同样只给 register（返回 disposer）与 list，不给 unregister。
     voice: {
       register: registerVoiceProvider,
       list: listVoiceProviders,
-    },
-    // 识别：与合成对称的一槽；注册后 /voice/hear 只走它，不再看宿主自带的 speechToText。
-    speech: {
-      register: registerSpeechProvider,
-      list: listSpeechProviders,
     },
   });
 
@@ -237,8 +203,6 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
     memesUserRoot,
     memeDirsFor,
     optionalService,
-    standaloneAiPolicy,
-    standaloneAiBalance,
     state,
     menuRegistry,
     playback,

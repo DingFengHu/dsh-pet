@@ -34,20 +34,14 @@ function pickGlobals(main) {
   return {
     notificationsEnabled: source.notificationsEnabled !== false,
     clickSoundEnabled: source.clickSoundEnabled !== false,
-    whisperImageEnabled: source.whisperImageEnabled === true,
-    chatImageEnabled: source.chatImageEnabled === true,
-    chatAnimationEnabled: source.chatAnimationEnabled === true,
     confineToScreen: source.confineToScreen === true,
     trayEnabled: source.trayEnabled !== false,
     voiceEnabled: source.voiceEnabled === true,
     voiceName: typeof source.voiceName === 'string' && source.voiceName ? source.voiceName : (VOICES[1] ? VOICES[1].id : ''),
     voiceVolume: typeof source.voiceVolume === 'number' ? source.voiceVolume : 1,
-    voiceWhisperEnabled: source.voiceWhisperEnabled !== false,
     voiceTodoEnabled: source.voiceTodoEnabled !== false,
     physics: Object.assign({}, FALLBACK_PHYSICS, source.physics || {}),
     font: Object.assign({}, FALLBACK_FONT, source.font || {}),
-    chatMemoryRounds: Number.isFinite(Number(source.chatMemoryRounds)) ? Number(source.chatMemoryRounds) : 0,
-    chatImageLimit: Number.isFinite(Number(source.chatImageLimit)) ? Number(source.chatImageLimit) : 0,
     animationWeights: pickWeights(source.animationWeights),
   };
 }
@@ -56,12 +50,10 @@ function initDrafts(config) {
   state.config = config;
   state.globals = pickGlobals(config.main);
   state.pets = {};
-  state.prompts = {};
   for (const key of Object.keys(config)) {
     const conf = config[key];
     if (!conf || !Array.isArray(conf.pets)) continue;
     state.pets[key] = cloneJson(conf.pets);
-    if (typeof conf.whisperPrompt === 'string') state.prompts[key] = conf.whisperPrompt;
   }
   if (!state.pets.main) state.pets.main = [];
   if (!state.pets[state.entry]) state.entry = 'main';
@@ -117,20 +109,14 @@ function petsBody() {
   return Object.assign({ pets: state.pets.main }, {
     notificationsEnabled: state.globals.notificationsEnabled,
     clickSoundEnabled: state.globals.clickSoundEnabled,
-    whisperImageEnabled: state.globals.whisperImageEnabled,
-    chatImageEnabled: state.globals.chatImageEnabled,
-    chatAnimationEnabled: state.globals.chatAnimationEnabled,
     confineToScreen: state.globals.confineToScreen,
     trayEnabled: state.globals.trayEnabled,
     voiceEnabled: state.globals.voiceEnabled,
     voiceName: state.globals.voiceName,
     voiceVolume: state.globals.voiceVolume,
-    voiceWhisperEnabled: state.globals.voiceWhisperEnabled,
     voiceTodoEnabled: state.globals.voiceTodoEnabled,
     physics: physicsBody(),
     font: state.globals.font,
-    chatMemoryRounds: state.globals.chatMemoryRounds,
-    chatImageLimit: state.globals.chatImageLimit,
     animationWeights: state.globals.animationWeights,
   });
 }

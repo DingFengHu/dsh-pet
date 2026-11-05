@@ -15,7 +15,6 @@ export {
   type ConfigMeta,
   loadConfig,
   loadMeta,
-  loadModelCatalog,
   type PetLayerOutcome,
   saveConfig,
   type SaveFields,
@@ -26,4 +25,4 @@ export { diffPackWrites, type PackWrite } from './pack-writes.ts';
 export { persistSettings, type SaveResult, syncSettings } from './persist.ts';
 export { createWriteFlow, type WriteFlow, type WriteFlowDeps } from './write-flow.ts';
 export { type ConfigLoad, type LoadState, useConfigLoad } from './use-config-load.ts';
-export { type FormValues, type InvalidKey, modelPairValid, validateForm } from './validate-form.ts';
+export { type FormValues, type InvalidKey, validateForm } from './validate-form.ts';

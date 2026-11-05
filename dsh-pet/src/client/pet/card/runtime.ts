@@ -10,10 +10,9 @@ import { postAction } from '../../../shared/state.ts';
 import { ROUTE_PATH } from '../../../shared/constants.ts';
 import { resolveFontPx } from '../../../shared/fonts.ts';
 import { resolvePetSizePx } from '../../../shared/pet-size.ts';
-import { makeBalanceBubble, makeWhisperBubble } from '../../bubble.ts';
+import { makeWhisperBubble } from '../../bubble.ts';
 import { makeTodoBubble } from '../../todo-bubble.ts';
 import { petBridge } from '../../settings.ts';
-import { playClickSound } from '../click-sound.ts';
 import { createMenuActions, type MenuActions } from '../menu-actions.ts';
 import { derivePetMetrics, petRootStyle, petStageStyle } from '../motion/geometry.ts';
 import { makePlaybackReporter } from '../playback-report.ts';
@@ -41,15 +40,14 @@ import type { PetRuntime } from '../types.ts';
 export function createCardRuntime(rt: PetRuntime) {
   const { h, useEffect, useRef, useState } = rt;
   /** 余额气泡：数据与显隐由装配根传入。 */
-  const BalanceBubble = makeBalanceBubble({ h, useState, useEffect });
   /** 碎碎念气泡：文本与显隐由装配根传入。 */
   const WhisperBubble = makeWhisperBubble({ h });
   /** 待办气泡：面板本体挂在自己身上，关闭按钮回调装配根。 */
   const TodoBubble = makeTodoBubble({ h, useEffect, useRef });
-  /** 四种气泡的单槽：显隐、停留计时与优先级都在这里。 */
+  /** 各气泡的单槽：显隐、停留计时与优先级都在这里。 */
   const useBubbleSlots = createBubbleSlots(
     { h, useState, useEffect, useRef },
-    { balanceBubble: BalanceBubble, todoBubble: TodoBubble, whisperBubble: WhisperBubble },
+    { todoBubble: TodoBubble, whisperBubble: WhisperBubble },
   );
   const useCardState = createCardState({ useState, useRef });
   const useLockFreeze = createLockFreeze({ useEffect, useRef });
@@ -61,7 +59,7 @@ export function createCardRuntime(rt: PetRuntime) {
   const useCardEntry = createCardEntry({ useEffect, useRef });
 
   return function useCardRuntime(props: PetCardProps): CardViewProps {
-    const { arena, balance, balanceManual, cfg, lock, lockTick, menuItemsRef, sleep, sleepTick, workStatus } = props;
+    const { arena, cfg, lock, lockTick, menuItemsRef, workStatus } = props;
     const { onFocusSession } = props;
 
     // 实际渲染宽度：百分比只在挂载与配置变更时按当次视口宽解析一次，拖窗口不跟随。
@@ -121,12 +119,9 @@ export function createCardRuntime(rt: PetRuntime) {
       // eslint-disable-next-line react-hooks/exhaustive-deps -- setter 稳定，变化原因只有这三个位置字段
     }, [cfg.position.corner, cfg.position.marginX, cfg.position.marginY]);
 
-    // 四种气泡的单槽：显隐、停留计时与优先级都在 bubble-slots，这里只喂视图输入。
+    // 各气泡的单槽：显隐、停留计时与优先级都在 bubble-slots，这里只喂视图输入。
     const bubbles = useBubbleSlots({
       assetRoot: cfg.assetRoot,
-      balance,
-      balanceEnabled: cfg.balanceEnabled,
-      balanceManual,
       workStatusEnabled: cfg.workStatusEnabled,
       workTerminal: workStatus?.state === 'success' || workStatus?.state === 'error',
       workSessionId: workStatus?.sessionId ?? null,
@@ -185,7 +180,6 @@ export function createCardRuntime(rt: PetRuntime) {
       motion,
       runMenuAction: (leaf, playbackId, keepFacing) => menuActionsRef.current?.run(leaf, playbackId, keepFacing),
       showTodo: bubbles.showTodo,
-      stage: () => stageRef.current,
       tipRef,
       toggleTodo: bubbles.toggleTodo,
     });
@@ -197,7 +191,6 @@ export function createCardRuntime(rt: PetRuntime) {
       applyMerged: (merged) => petBridge.reload(merged),
       faceLeft: () => actions.setFacing('left'),
       isFacingRight: () => card.facingRef.current === 'right',
-      openChat: () => entryRef.current?.openChat(),
       openTodo: () => entryRef.current?.openTodo(),
       petId: cfg.id,
       playOnce: (anim, playbackId) => {
@@ -207,11 +200,6 @@ export function createCardRuntime(rt: PetRuntime) {
       },
       report: reportPlayback,
       resetPosition: () => actions.setCustomPos(null),
-      // 睡觉：菜单在点击那一刻就要能拒绝（对话弹窗、待办面板、动作点播都是纯前端行为，宿主拦不到）
-      say: (text) => liveRef.current.flow?.speak(text, undefined, undefined, undefined, false),
-      locked: () => ownAnim.isFrozen(),
-      sleepRefuseTexts: () => cfgRef.current.sleepRefuseTexts ?? [],
-      sleeping: () => liveRef.current.flow?.sleeping() ?? false,
       stopMove: motion.stopMove,
       stopThrow: () => motion.flight.stop(),
       tryMove: motion.walk.tryMove,
@@ -255,29 +243,18 @@ export function createCardRuntime(rt: PetRuntime) {
       cfg: () => cfgRef.current,
       isDragging: () => drag.isActive(),
       ownAnim,
-      // 第四个参数 = 宿主指令：来自 pets.<id>.anim 的点播，不按「用户点击」判睡觉
       playByName: (anim, playbackId, keepFacing) =>
-        menuActions.run({ anim, label: anim }, playbackId, keepFacing, true),
+        menuActions.run({ anim, label: anim }, playbackId, keepFacing),
       posFollow: motion.posFollow,
       speak: (text, image, url, duration, anim) => liveRef.current.flow?.speak(text, image, url, duration, anim),
-      // 睡觉是状态不是指令：自动来源（工作状态/余额/碎碎念）读它决定要不要闭嘴
-      sleeping: () => liveRef.current.flow?.sleeping() ?? false,
-      // 占用锁：锁的语义是把控制权交给第三方，睡觉的菜单闸门与自动化闸门都对持锁者让路
-      locked: () => ownAnim.isFrozen(),
       stopMotion: motion.stopMove,
       tryWalk: motion.walk.tryMove,
     };
-    // 七条指令的分派在 cue-effects：这里只把当拍 props 交过去。
+    // 五条指令的分派在 cue-effects：这里只把当拍 props 交过去。
     useCueEffects(hub, props);
     // 动画流比指令处理晚一步创建：它要读工作状态，也要经 hub 说话与恢复档位。
     const flow = useAnimationFlow(hub, workStatus);
     liveRef.current.flow = flow;
-
-    // 睡觉：宿主写叶子、渲染端执行；只在叶子变化时推一次（未变化的重渲染不重播动画）。
-    useEffect(() => {
-      if (sleep) flow.applySleep(sleep);
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- 只按叶子变化次数触发，sleep 是当拍快照
-    }, [sleepTick]);
 
     const stageStyle = petStageStyle(bottomPad);
     const rootStyle = petRootStyle(
@@ -287,7 +264,7 @@ export function createCardRuntime(rt: PetRuntime) {
     );
 
     return {
-      // 气泡单槽：四种气泡共用同一套定位，按优先级只挂一个。
+      // 气泡单槽：各气泡共用同一套定位，按优先级只挂一个。
       bubble: bubbles.node(),
       corner,
       facing,
@@ -296,24 +273,7 @@ export function createCardRuntime(rt: PetRuntime) {
       marginX: margin.x,
       marginY: margin.y,
       name: cfg.name,
-      onClick: () => {
-        // 拖拽守卫必须在睡觉分支之前：指针捕获后浏览器一定会在松手时补发一次 click，
-        // 它不是点击（拖了多久都一样）。醒着时这条由 drag.onClick 内部判，睡觉分支绕过了那里。
-        if (drag.justDragged() || drag.isActive()) return;
-        const phase = liveRef.current.flow?.sleepPhase() ?? null;
-        // 真睡着（循环中或醒来过渡）：点一下 = 叫醒。挤压与音效照常，
-        // 但不播点击回应动画——这一下的产物是「起来」。
-        if (phase !== null && phase !== 'start') {
-          const front = ownAnim.frontVideo();
-          if (front) liveRef.current.squash.start(front);
-          playClickSound();
-          void postAction(ROUTE_PATH + '/wake?pet=' + encodeURIComponent(cfg.id));
-          return;
-        }
-        // 入睡过渡里被点：这次入睡作废，按普通点击处理（挤压 + 音效 + 点击回应），不再播「起来」
-        if (phase === 'start') void postAction(ROUTE_PATH + '/wake?pet=' + encodeURIComponent(cfg.id));
-        drag.onClick();
-      },
+      onClick: drag.onClick,
       onContextMenu: entry.handleContextMenu,
       onPointerDown: drag.onPointerDown,
       onPointerEnter: entry.onPointerEnter,

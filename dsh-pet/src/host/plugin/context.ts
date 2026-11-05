@@ -10,7 +10,7 @@
 /**
  * 宿主上下文（DSH 注入）。
  *
- * peer 类型包虽然可解析，但没有把 webServer / commands / llm 等服务合并进 Context，
+ * peer 类型包虽然可解析，但没有把 webServer / connection 等服务合并进 Context，
  * 直接标注成真实类型只会把每个调用点都逼成断言；这里保留受控别名，与 apply 的 `ctx: any` 同口径。
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- DSH 注入的 ctx 无完整静态类型，只在这一处放行 */
