@@ -14,7 +14,7 @@
   <img alt="assets" src="https://img.shields.io/badge/assets-dynamic%20animations-ff69b4">
 </p>
 
-一只住在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里的桌面宠物：待机呼吸、随机动作（打瞌睡、玩魔方、吃火锅……）、左右转向、屏幕漫游、点击 Q 弹、拖拽甩抛反弹、右键菜单点播——一百余个透明动画随时无缝衔接；还能跟随 DSH 会话事件切换工作状态动画、按档位播放余额动画 + 头顶气泡、碎碎念与对话聊天、窗口失焦时弹系统通知。可多开同屏，能脱离浏览器住上**桌面**（透明置顶小窗），也能自己添加**全新宠物种类**（pet pack）。
+一只住在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里的桌面宠物：待机呼吸、随机动作（打瞌睡、玩魔方、吃火锅……）、左右转向、屏幕漫游、点击 Q 弹、拖拽甩抛反弹、右键菜单点播——一百余个透明动画随时无缝衔接；还能跟随 DSH 会话事件切换工作状态动画 + 头顶气泡、待办提醒、窗口失焦时弹系统通知。可多开同屏，能脱离浏览器住上**桌面**（透明置顶小窗），也能自己添加**全新宠物种类**（pet pack）。
 
 这不是一个普通插件，而是**完整的三件套项目**：
 
@@ -44,28 +44,25 @@ AI 生成动画的配方     源视频 → 透明动画的管线    运行在 DS
 
 只做桌宠本身，不碰 DSH 内核；能力就下面这些。
 
-- **100+ 段动画资产**：待机、走动漫游、玩耍、工作、对话等全部表现都由视频动画驱动，按权重首尾相接，也可换成自己的素材。
+- **100+ 段动画资产**：待机、走动漫游、玩耍、工作等全部表现都由视频动画驱动，按权重首尾相接，也可换成自己的素材。
 - **多开与种类**：同时养多只，各自大小与位置；也能自定义宠物种类（pet pack），一类一套动画与素材。
 - **三种运行形态**：DSH web 的浏览器 overlay、DSH 桌面应用的透明置顶窗、完全不依赖 DSH 的独立模式。
 - **交互与物理**：点击回应、拖拽甩抛、双击弹弓、宠物互撞，同一套物理与 Q 弹挤压手感，参数可调。
 - **手机与触屏**：触屏直接拖拽甩抛，与鼠标共用同一套物理与挤压手感；手机浏览器上还能倾斜手机改变重力方向、摇一摇把宠物甩出去、碰撞时震动反馈——三项可在设置页「移动端效果」里分别关闭。传感器只在 HTTPS 或 localhost 下可用（iOS 还需点一次授权），iOS 与桌面端没有振动 API，会自动跳过。
-- **碎碎念与对话**：按周期自动说一句，也能随时聊；记忆持久化、可配图、可念出来。
-- **语音（说与听）**：对话回复与手动碎碎念会念出来，音色、音量与总开关可配；按住对话窗的话筒说一句，录音转成文字直接填进输入框。
-- **余额展示**：内置常见服务商的余额 / 额度查询，按剩余额度分档播动画并弹气泡；也可以登记自己的服务商。
+- **语音**：待办提醒与投喂的气泡可以念出来，音色、音量与总开关可配。
 - **工作状态联动**：跟随 DSH 会话状态切档位动画，并在头顶常驻一句话。
 - **待办事项**：一句话加可选到期时间，清单挂在宠物头顶；越临近到期提醒越密，由宠物说出来。
-- **睡觉**：右键「睡觉」让它睡下，点一下或右键「起来」叫醒；睡着时完全安静——随机动作、碎碎念、余额、待办与工作状态都不打扰，还会按周期说梦话；睡姿可用 `animations.sleep` 配多套（蹲着睡、趴着睡…）。
 - **系统通知**：任务完成或需要确认时弹系统通知，点一下回到对应会话。
 - **右键菜单**：换动画、开聊、回到原位、打开 DSH / 网站、重载配置。
 - **其他**：点击音效、系统托盘与每只宠物的显示位置。
 
-各项能力的详细说明见 **[FEATURES.md](FEATURES.md)**；配置（大小 / 位置 / 多开 / 物理 / 模型 / 人设 / 宠物种类）见 **[CONFIG.md](CONFIG.md)**。
+各项能力的详细说明见 **[FEATURES.md](FEATURES.md)**；配置（大小 / 位置 / 多开 / 物理 / 宠物种类）见 **[CONFIG.md](CONFIG.md)**。
 
 ## 🔌 对外接口（供其他插件调用）
 
 桌宠不只自己玩，也**对外开放两条调用通道**，让别的插件或脚本能驱动它、读它的状态。
 
-- **能做什么**：让它说一句指定的话、播一段指定动画、与它对话；读它当前说的话、工作状态、系统通知与余额
+- **能做什么**：让它说一句指定的话、播一段指定动画；读它当前说的话、工作状态与系统通知
 - **为什么开放**：桌宠不该只是个摆设——比如一个「女仆」插件巡检验完想说句话，就能让桌宠当它的「实体」开口；也方便任何人基于它做二次开发
 - **通道一 · HTTP**：挂在 DSH 自己的 Web 服务上（前缀 `/dsh-pet-7340`，只监听本机、无鉴权），跨进程、脚本可直接调。动作类接口只回 `{ok}`，数据统一从 `GET /state` 读
 - **通道二 · Cordis 服务**：客户端半侧在 DSH web 页面内注册，同页客户端插件用 `ctx.get('petApi7340')` 直接取，零网络、零端口；只在该页面实例内有效，方法与返回见 [`CORDIS.md`](CORDIS.md)
@@ -241,18 +238,7 @@ AI 生成动画的配方     源视频 → 透明动画的管线    运行在 DS
   <img src="dsh-pet/assets/preview/beishubiao-tuozhuai-xuankong-fankui.gif" width="160" alt="被鼠标拖拽悬空反馈" title="被鼠标拖拽悬空反馈">
 </p>
 
-**余额事件**（按余额已用百分比分档，满格 → 告急 → 耗尽）
-
-<p>
-  <img src="dsh-pet/assets/preview/qian-dai-man-yi.gif" width="160" alt="余额-钱袋满溢" title="余额-钱袋满溢">
-  <img src="dsh-pet/assets/preview/jin-dai-ding-dang.gif" width="160" alt="余额-金袋叮当" title="余额-金袋叮当">
-  <img src="dsh-pet/assets/preview/qian-dai-ru-chang.gif" width="160" alt="余额-钱袋如常" title="余额-钱袋如常">
-  <img src="dsh-pet/assets/preview/shu-jin-zhou-mei.gif" width="160" alt="余额-数金皱眉" title="余额-数金皱眉">
-  <img src="dsh-pet/assets/preview/dai-kong-ru-xi.gif" width="160" alt="余额-袋空如洗" title="余额-袋空如洗">
-  <img src="dsh-pet/assets/preview/fen-wen-bu-sheng.gif" width="160" alt="余额-分文不剩" title="余额-分文不剩">
-</p>
-
-**碎碎念说话动画**（碎碎念 / 对话回复触发，随机抽 1 段）
+**说话动画**（弹说话气泡时随机抽 1 段）
 
 <p>
   <img src="dsh-pet/assets/preview/suisuinian-cazhuo-suisuinian.gif" width="160" alt="碎碎念-擦桌碎碎念" title="碎碎念-擦桌碎碎念">
@@ -269,14 +255,6 @@ AI 生成动画的配方     源视频 → 透明动画的管线    运行在 DS
   <img src="dsh-pet/assets/preview/gongzuozhuangtai-yuandi-duobu-zhangwang.gif" width="160" alt="工作状态-原地踱步张望" title="工作状态-原地踱步张望">
   <img src="dsh-pet/assets/preview/gongzuozhuangtai-queyue-qingzhu.gif" width="160" alt="工作状态-雀跃庆祝" title="工作状态-雀跃庆祝">
   <img src="dsh-pet/assets/preview/gongzuozhuangtai-chuitou-tanqi-maohan.gif" width="160" alt="工作状态-垂头叹气冒汗" title="工作状态-垂头叹气冒汗">
-</p>
-
-**睡觉**（右键「睡觉」或鼠标停上去按 `S`；睡着时点一下叫醒）
-
-<p>
-  <img src="dsh-pet/assets/preview/shuijiao-kaishi.gif" width="160" alt="睡觉-开始" title="睡觉-开始">
-  <img src="dsh-pet/assets/preview/shuijiao-xunhuan.gif" width="160" alt="睡觉-循环" title="睡觉-循环">
-  <img src="dsh-pet/assets/preview/shuijiao-qilai.gif" width="160" alt="睡觉-起来" title="睡觉-起来">
 </p>
 
 > 注：动画为透明背景；GIF 预览中透明部分显示为页面底色，实际 webm 播放为透明。
@@ -299,7 +277,7 @@ AI 提示词 → 绿幕视频 → 透明动画 → 插件，换角色、换动�
 ├── .github/workflows/ # CI：Safari/HEVC 转码流水线（macOS runner，手动触发 → 发布 assets-mov Release）
 ├── dsh-pet/           # ③ 插件（可独立 npm 发布）
 │   ├── src/
-│   │   ├── host/       # 宿主半侧：配置 / 路由 / 余额 / 工作状态
+│   │   ├── host/       # 宿主半侧：配置 / 路由 / 工作状态
 │   │   ├── client/     # 浏览器半侧：宠物渲染 / 动画链 / 设置页
 │   │   ├── shared/     # 双端共用纯逻辑（物理 / 菜单 / 取数）
 │   │   └── standalone/ # 独立模式 CLI（不依赖 DSH 直接跑桌宠）
