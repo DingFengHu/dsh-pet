@@ -59,70 +59,42 @@ Object.assign(PetSprite.prototype, {
     this.customPos = null; // 拖拽后的会话内位置（{rx, ry} 比例）；restart 回角落
   },
 
-  /** 菜单、气泡、提示、余额、碎碎念、工作状态、占用锁与对话弹窗的开关状态。 */
+  /** 菜单、气泡、提示、说话、工作状态、占用锁与待办面板的开关状态。 */
   initPanels() {
     // 第三方菜单项（/state 的 sections.menu 快照）：只在右键那一刻拼进菜单，不参与渲染。
     this.menuItems = [];
     // 右键菜单（统一自绘组件，两端共用同一份：树+渲染均来自 shared-core）
     this.menuOpen = false; // 菜单开启期间强制整窗可交互（悬停菜单不触发穿透翻转）
     this.menuClose = null; // 当前菜单的 close()（打开时挂载，关闭后置空）
-    // 余额气泡
-    this.bubbleOn = false;
-    this.bubbleTimer = null;
     // 悬浮提示（替代原生 title）：显隐 + 最近一次光标位置（视口坐标，见 renderTip）
     this.tipOn = false;
     this.tipCursor = null;
-    this.balanceView = null;
-    this.balanceWrap = false; // true = 当前余额气泡是不可用的「文字说明」（多行，需换行变体）
-    this.balanceState = null; // 最近一次余额读数（展开态按页现算窗口明细与用量；balanceView 只是收起态的行）
-    this.balanceViewIndex = 0; // 当前页：点一下切下一页（windows 是收起 / 窗口明细 / 用量，有用量才有第三页；custom 是 views.length 页）
-    this.balanceFadeTimer = null; // 展开/收起的淡出等待（250ms 后才换内容，避免硬切）
-    this.prevTick = 0;
-    // 说话（碎碎念/命令气泡/对话回复）：文本与配图由容器统一轮询 /state 后经 showWhisper 送进来。
+    // 说话气泡：文本与配图由容器统一轮询 /state 后经 showWhisper 送进来。
     this.whisperOn = false;
     this.whisperTimer = null;
     this.whisperView = null;
     this.whisperText = '';
     // 收起计划：合成期间挂起计时，播完再留尾巴（状态机在 shared/bubble-hold，与浏览器端同一份）
     this.whisperHold = S.BUBBLE_HOLD_IDLE;
-    // 配图名称（配置 memes 的键；whisperImageEnabled 开启时由 host 随机抽定，随文本一起来）
+    // 配图名称（配置 memes 的键；/say 带 image= 时随文本一起来）
     this.whisperImage = '';
     // 配图地址（与 whisperImage 二选一）：两种形态由字段名区分，不靠嗅探。
     this.whisperUrl = '';
     // 工作状态联动：容器每秒轮询递增 workTick → 本宠物按档位播动画与气泡，未启用时完全免疫。
-    // 气泡单槽优先级：终态任务 > whisper > balance > 非终态任务（见 renderBubble）。
+    // 气泡单槽优先级：终态任务 > whisper > 非终态任务（见 renderBubble）。
     this.workOn = false;
     this.workTimer = null;
     this.workText = null;
     this.workState = null; // 最近一次工作状态（互动/事件动画播完恢复档位循环用）
     this.workSessionId = null; // 当前展示条目所属会话：有值才让工作气泡可点（点了跳过去）
-    this.bubbleSlot = 'none'; // 当前显示的气泡槽位（renderBubble 写）：点击处理据此分清翻页与跳会话
+    this.bubbleSlot = 'none'; // 当前显示的气泡槽位（renderBubble 写）：点击处理据此判断工作气泡可否跳会话
     this.prevWorkState = null; // 上一档状态（气泡只在状态变化时点亮/收起）
     this.prevWorkTick = 0;
     // 占用锁：frozen = 此刻正被第三方占用；lockTimer 按叶子里的 expiresAt 自己到点解除
     // （宿主侧过期是懒判的，不会推「锁没了」）。
     this.frozen = false;
     this.lockTimer = null;
-    // 睡觉：sleeping = 此刻处于睡觉态（含「起来」那段过渡），sleepSet = 宿主挑定的三段名，
-    // sleepPhase = 当前段（start / loop / end）。阶段由 handleEnded 推进——视频播完只有渲染端知道。
-    this.sleeping = false;
-    this.sleepSet = null;
-    this.sleepPhase = null;
-    // 对话弹窗：当前挂载句柄（close / startHear / stopHear）+ 开启标记。chatOpen 是穿透守卫——
-    // 弹窗是窗口内 DOM，期间整窗保持可交互，否则光标移到输入框就会被 onMouseMove 翻回穿透、点击全被透传。
-    this.chatMount = null;
-    this.chatOpen = false;
-    // 快捷键「按住 M 说话」：按下开录、松手收尾。状态机在 shared（自动重复与失焦都要拦），
-    // 本实例只负责把两个键盘事件原样送进去，动作落到 menu 的 startHearChat / stopHearChat。
-    // 闸门两条：鼠标在宠物身上，或光标还在宠物自己的弹窗里——弹窗一开焦点就在输入框，
-    // 那时恰恰是最想按住说话的时候（判定不看焦点，开录时由 chat/dom 把输入框 blur 掉）。
-    this.hearHold = S.createHearHold({
-      isArmed: () =>
-        Boolean(this.hoverBody) || Boolean(this.chatMount && this.chatMount.el.contains(document.activeElement)),
-      onPress: () => this.startHearChat(),
-      onRelease: () => this.stopHearChat(),
-    });
-    // 待办面板：与对话弹窗同一套穿透守卫（面板同样是窗口内 DOM，而且比对话窗更大）。
+    // 待办面板：穿透守卫（面板是窗口内 DOM，期间整窗保持可交互）。
     // todoPanel 是面板句柄（占气泡槽，节点塞在 this.bubble 里），todoOpen 是穿透守卫标记。
     this.todoPanel = null;
     this.todoOpen = false;
@@ -164,18 +136,12 @@ Object.assign(PetSprite.prototype, {
     this.hit.setAttribute('aria-label', this.pet.name);
     this.bubble = document.createElement('div');
     this.bubble.className = 'pet-bubble';
-    // 气泡点击按当前槽位分流：工作气泡跳会话，余额气泡切页。都就地吞掉事件，别落到下面的本体命中层。
+    // 工作气泡可点 → 跳会话；就地吞掉事件，别落到下面的本体命中层。
     this.bubble.addEventListener('click', (e) => {
-      if (this.workClickable()) {
-        e.stopPropagation();
-        e.preventDefault();
-        this.openWorkSession();
-        return;
-      }
-      if (!this.balanceClickable()) return;
+      if (!this.workClickable()) return;
       e.stopPropagation();
       e.preventDefault();
-      this.toggleBalanceDetail();
+      this.openWorkSession();
     });
     // 悬浮提示：this.el 内的绝对定位浮层，位置与翻边由 renderTip 决定，样式走 shared 的 TOOLTIP_CSS。
     this.tip = document.createElement('div');
@@ -209,19 +175,12 @@ Object.assign(PetSprite.prototype, {
     window.addEventListener('pointerup', (e) => this.onPointerUp(e), { signal: ac.signal });
     window.addEventListener('pointercancel', (e) => this.onPointerUp(e), { signal: ac.signal });
     this.hit.addEventListener('lostpointercapture', (e) => this.onPointerUp(e), { signal: ac.signal });
-    // 拖一张图到宠物身上：直接开对话并挂成待发送图（浏览器端同一套判据）
-    this.hit.addEventListener('dragover', (e) => this.onDragOverImage(e), { signal: ac.signal });
-    this.hit.addEventListener('drop', (e) => this.onDropImage(e), { signal: ac.signal });
-    // 悬停时按键：L 开对话、按住 M 说话、D 开关待办、S 截图、Z 切换睡/醒。
+    // 悬停时按键：D 开关待办、1-4 切显示位置。
     // 窗口未被聚焦时收不到按键（透明窗用 showInactive 显示，不抢焦点）
     window.addEventListener('keydown', (e) => this.onHotkey(e), { signal: ac.signal });
-    // 悬停时粘贴：剪贴板里有图就直接开对话（或塞进已经开着的对话）
-    window.addEventListener('paste', (e) => this.onPasteImage(e), { signal: ac.signal });
-    // 按住说话靠 keyup 收尾：这条必须在按住期间一直有效，与 keydown 同一生命周期
-    window.addEventListener('keyup', (e) => this.onHotkeyUp(e), { signal: ac.signal });
     // 文本输入拿到焦点时补一次系统键盘焦点：X11/KWin 不会因为 DOM 聚焦就把键盘焦点给窗口，
     // 不补的话光标在闪、按键却落到上一个窗口。判据复用 shared 的 isTypingTarget，
-    // 对话弹窗与待办面板都是窗口内 DOM，一处委托全覆盖。
+    // 待办面板是窗口内 DOM，一处委托全覆盖。
     document.addEventListener(
       'focusin',
       (e) => {
@@ -239,10 +198,8 @@ Object.assign(PetSprite.prototype, {
       () => {
         // 切到其它应用后旧菜单不该继续占着透明窗口；丢失松手时也释放拖拽。
         this.closeMenu();
-        // 切走时松手收不到 keyup：不在这里收尾，录音会一直开到 24 秒上限
-        this.hearHold.release();
         if (this.dragState.active) this.onPointerUp();
-        if (!this.chatOpen && !this.todoOpen) this.setInteractive(false);
+        if (!this.todoOpen) this.setInteractive(false);
       },
       { signal: ac.signal },
     );
@@ -250,9 +207,9 @@ Object.assign(PetSprite.prototype, {
       'mouseleave',
       () => {
         // 光标离开窗口：菜单若开着立刻收起（窗口内 DOM，离开即不可达），再恢复穿透。
-        // 拖拽中与对话弹窗开着都不恢复：前者会绕过 busy 并丢失 pointerup，后者要留光标回来点输入框。
+        // 拖拽中与待办面板开着都不恢复：前者会绕过 busy 并丢失 pointerup，后者要留光标回来操作面板。
         this.closeMenu();
-        if (!this.chatOpen && !this.todoOpen && !this.dragState.active) this.setInteractive(false);
+        if (!this.todoOpen && !this.dragState.active) this.setInteractive(false);
       },
       { signal: ac.signal },
     );

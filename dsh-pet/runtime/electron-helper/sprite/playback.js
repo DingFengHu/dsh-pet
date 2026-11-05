@@ -130,7 +130,7 @@ Object.assign(PetSprite.prototype, {
    * 占用锁：冻结 / 解冻（与浏览器同一套语义）。
    *
    * 冻结期间只挡四件事，且都在渲染端：随机链、当前自播动画（暂停定帧）、自动来源的余额与
-   * 工作状态表现（见 events.js 的 onBalanceTick / onWorkTick / showBalanceNotice）、屏上的任务
+   * 工作状态表现（见 events.js 的 onWorkTick）、屏上的任务
    * 状态气泡（锁生效就收掉，解冻不补亮）。
    * 显式指令（say / anim / position / throw）一概不挡——那正是占用要保护的东西。
    */
@@ -161,9 +161,7 @@ Object.assign(PetSprite.prototype, {
       return;
     }
     console.log(stamp + ' 占用锁解除：恢复');
-    // 解冻：睡姿优先接回（冻结只暂停、没换源，续播即可），其次非终态工作状态回档位循环，
-    // 否则回 idle 一次，播完由 handleEnded 接回随机链。
-    if (this.resumeSleepAnim()) return;
+    // 解冻：非终态工作状态回档位循环，否则回 idle 一次，播完由 handleEnded 接回随机链。
     if (this.resumeWorkStatusAnim()) return;
     if (this.animations.idle.length) this.playOnce(S.pick(this.animations.idle, this.anim));
   },
@@ -191,70 +189,11 @@ Object.assign(PetSprite.prototype, {
     );
   },
 
-  /**
-   * 睡觉叶子 → 进睡 / 醒来（与 setLock 同风格：只认叶子里的值，不往回写）。
-   *
-   * 三段名由宿主挑定，这里照播不重挑——自己挑会让两端播到不同的一套（蹲着入睡、趴着醒来）。
-   * 醒来不立刻清睡觉态：`end` 还得播一遍，清态与回随机链都在 handleEnded 里收尾。
-   * @param state - `{ sleeping: true, start, loop, end }` 或 `{ sleeping: false }`。
-   */
-  setSleep(state) {
-    if (!state) return;
-    const stamp = '[dsh-pet] ' + new Date().toTimeString().slice(0, 8) + ' pet=' + this.pet.id;
-    if (!state.sleeping) {
-      // 没在睡：醒来是幂等的空操作（重复叶子、老宿主，或叫醒一个本来醒着的宠物）
-      if (!this.sleeping || this.sleepPhase === 'end') return;
-      // 入睡过渡里被叫醒：取消这次入睡，不播「起来」——它不是真的睡着过。
-      // 这里不换源：点击路径已自己播了点击回应；菜单叫醒时当前「开始」播完会自然回随机链。
-      if (this.sleepPhase === 'start') {
-        this.sleeping = false;
-        this.sleepSet = null;
-        this.sleepPhase = null;
-        console.log(stamp + ' 入睡被打断：不播起来');
-        return;
-      }
-      this.sleepPhase = 'end';
-      this.stopMove();
-      this.playOnce(this.sleepSet.end);
-      console.log(stamp + ' 醒来：播 ' + this.sleepSet.end + ' 一遍');
-      return;
-    }
-    // 已在睡（含正在播「起来」的过渡段）：重复叶子不重放，保持原套
-    if (this.sleeping) return;
-    this.sleeping = true;
-    this.sleepSet = { start: state.start, loop: state.loop, end: state.end };
-    this.sleepPhase = 'start';
-    this.stopMove();
-    // 与占用锁同一口径：进睡就把任务状态气泡收掉（醒来不补亮，等下一次状态变化再对齐）
-    if (this.workTimer !== null) window.clearTimeout(this.workTimer);
-    this.workTimer = null;
-    this.workOn = false;
-    this.renderBubble();
-    this.playOnce(state.start);
-    console.log(stamp + ' 进睡：' + state.start + ' → ' + state.loop);
-  },
-
-  /**
-   * 请求进睡 / 叫醒：只发请求，画面等 sleep 叶子回来才动（三段名由宿主挑定）。
-   *
-   * 点击与右键菜单共用这一条路径；失败只记日志，不弹框——菜单动作不该打断用户。
-   * @param action - `'sleep'` = 睡下，`'wake'` = 叫醒。
-   */
-  postSleepAction(action) {
-    const route = action === 'wake' ? '/wake' : '/sleep';
-    S.postAction(BASE + route + '?pet=' + encodeURIComponent(this.pet.id)).then((ok) => {
-      if (!ok) console.error('[dsh-pet] ' + (action === 'wake' ? '叫醒' : '进睡') + '请求未成功 pet=' + this.pet.id);
-    });
-  },
-
   // 动画链（纯逻辑在 shared）
   playIdle() {
     // 占用锁：锁生效时不掷骰。这里是随机链的唯一入口（动画播完才会走到），一句判断就把随机动画、
     // 随机转向与自主走位一起停住——宠物停在最后一帧，等持锁者的下一条指令（走 /anim，不经这里）。
     if (this.frozen) return;
-    // 睡觉：随机链整个停住——不掷骰、不自己走、不自己翻朝向。醒来时 setSleep 先播 end，
-    // 播完由 handleEnded 清掉睡觉态再回到这里（那时 sleeping 已经为 false）。
-    if (this.sleeping) return;
     this.stopMove();
     const { animations, animationWeights } = { animations: this.animations, animationWeights: this.weights };
     const roll = Math.random();
@@ -292,31 +231,6 @@ Object.assign(PetSprite.prototype, {
       const done = this.playback;
       this.playback = null; // 先清再上报：后续链式换源不该把它当成「被打断」
       this.reportPlayback(done, 'ended');
-    }
-    // 睡觉：动画链的推进归睡觉状态机（start 播完 → loop；end 播完 → 清态回随机链）。
-    // 放在拖拽守卫之前：睡着时拖拽不换动画、睡姿照播，start 播完必须照常切 loop，否则松手就停在末帧。
-    // 这几条分支都提前 return，其余 ended 逻辑（事件轮换、朝向翻转、随机链）在被拦住时一律不执行。
-    if (this.sleeping) {
-      const set = this.sleepSet;
-      if (set && this.sleepPhase === 'start') {
-        this.sleepPhase = 'loop';
-        // 循环段：loop=true；万一素材提前 ended，restartLoop 原地续播，不进 handleEnded。
-        this.switchTo(set.loop, false);
-        return;
-      }
-      if (this.sleepPhase === 'end') {
-        // 醒来收尾：先清睡觉态再回随机链，否则 playIdle 会被自己的门禁挡住
-        this.sleeping = false;
-        this.sleepSet = null;
-        this.sleepPhase = null;
-        this.playIdle();
-        return;
-      }
-      // loop 段本不该有 ended；真收到说明前台被别的动画（本地菜单点播）顶掉过，接回睡姿，别停在末帧
-      if (set && this.anim !== set.loop) {
-        this.switchTo(set.loop, false);
-      }
-      return;
     }
     if (this.dragState.active) return;
     // 占用锁：冻结期间动画链一律不推进，事件动画播完就停在最后一帧。下面几条路都会换源播放，
@@ -371,8 +285,6 @@ Object.assign(PetSprite.prototype, {
     // 占用锁：冻结期间不许由这条路把工作状态动画点回来——它读的是实时 workState，与 workTick 无关，
     // 持锁者每投一次带 anim 的气泡，说话动画播完就会走到这里。解冻路径是先置 frozen=false 再调它。
     if (this.frozen) return false;
-    // 睡觉：自动来源不接管动画——睡姿循环整段归睡觉状态机，醒来由 end 播完回随机链。
-    if (this.sleeping) return false;
     const state = this.workState;
     if (!state || state === 'success' || state === 'error') return false;
     const pool = this.animations.events?.workStatus;
@@ -388,15 +300,6 @@ Object.assign(PetSprite.prototype, {
     if (rotating)
       this.playOnce(name); // 多候选：播完由 handleEnded 轮换
     else this.switchTo(name, false); // 单候选：无限循环
-    return true;
-  },
-
-  // 睡觉期间被冻结暂停的那段接回播放（冻结只 pause、不换源，原地续播即可，start 播完照样能走 handleEnded）。
-  // 不在睡返回 false，让调用方继续走它原来的恢复路径。
-  resumeSleepAnim() {
-    if (!this.sleeping) return false;
-    const el = this.front === 0 ? this.videoA : this.videoB;
-    if (el) el.play().catch(() => {});
     return true;
   },
 

@@ -105,13 +105,8 @@ class PetSprite {
     this.inputRegionMutation.disconnect();
     this.inputRegionResize.disconnect();
     this.inputRegionElements.clear();
-    if (this.bubbleTimer !== null) window.clearTimeout(this.bubbleTimer);
     if (this.whisperTimer !== null) window.clearTimeout(this.whisperTimer);
     if (this.workTimer !== null) window.clearTimeout(this.workTimer);
-    if (this.chatMount) {
-      this.chatMount.close();
-      this.chatMount = null;
-    }
     this.closeMenu();
     this.stopThrow();
     this.stopDragFollow();
