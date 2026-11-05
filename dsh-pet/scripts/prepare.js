@@ -62,6 +62,7 @@ const keep = [
   // 插件图标：package.json 顶层 icon 指向这张图；缺图时读取方 dsh-app-boot 的 iconOf 会抛错、退回默认插画。
   'assets/logo.png',
   'scripts/ensure-electron.mjs',
+  'scripts/hermes-notification-snapshot.py',
   'cordis.patch.yml',
 ];
 writeFileSync(PKG, JSON.stringify({ ...pkg, files: keep }, null, 2) + '\n', 'utf8');

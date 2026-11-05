@@ -1,6 +1,7 @@
 'use strict';
 const { BrowserWindow, screen } = require('electron');
 const { decideWindowIgnore } = require('../pointer-target.js');
+const { safeHermesUrl } = require('../hermes-url.js');
 /**
  * 渲染端到主进程的 ipc：窗口跟随、飞行状态、碰撞转发、穿透翻转、输入租约与菜单首项（打开软件 / 打开 AI 设置）。
  *
@@ -185,6 +186,17 @@ function registerIpc({ ipcMain, petWindows, shell, openTarget, petRoute }) {
       return;
     }
     openSite(url);
+  });
+
+  // renderer 不是信任边界，协议与凭据必须在主进程再校验。
+  ipcMain.on('pet:open-hermes', (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed() || ![...petWindows.state.windows.values()].includes(win)) return;
+    const target = safeHermesUrl(payload?.url);
+    if (!target) return;
+    shell.openExternal(target).catch(() => {
+      console.warn('[dsh-pet-desktop-helper] 无法打开 Hermes 对话');
+    });
   });
 
   // 只叫窗口、不改去向：被别的窗口挡住时把主窗口提到前台。

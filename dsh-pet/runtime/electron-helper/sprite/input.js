@@ -238,7 +238,9 @@ Object.assign(PetSprite.prototype, {
   inputBusy() {
     // 可点的工作气泡（跳会话）同样是来源：它们长在窗口里、靠窗口级 click 触发，
     // 却悬在平时穿透的余量区，正需要借 busy + 控件矩形把它们圈出来。
-    return this.dragState.active || this.menuOpen || this.todoOpen || this.workClickable();
+    return (
+      this.dragState.active || this.menuOpen || this.todoOpen || this.bubbleSlot === 'hermes' || this.workClickable()
+    );
   },
 
   /** 工作气泡此刻是否可点：它正占着气泡槽，且拿到了可跳转的会话。 */
@@ -314,7 +316,7 @@ Object.assign(PetSprite.prototype, {
       return;
     }
     // 右键菜单/对话弹窗/待办面板开启：整窗保持可交互，关闭后恢复命中区判定
-    if (this.menuOpen || this.todoOpen) {
+    if (this.menuOpen || this.todoOpen || this.bubbleSlot === 'hermes') {
       this.syncInputRegions(); // 级联菜单按悬停增减面板，及时更新占用区域
       this.setInteractive(true);
       this.setTip(false); // 菜单/弹窗期间提示让位，不跟浮层抢注意力

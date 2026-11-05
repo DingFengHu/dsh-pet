@@ -53,10 +53,34 @@ Object.assign(PetSprite.prototype, {
     // 待办面板占气泡槽且优先级最高：它是用户主动打开的窗口，其余气泡一律让位。
     // 面板是外部塞进来的 DOM，重建 innerHTML 会把它自己抹掉，所以这一段只补显隐与让位。
     this.bubble.classList.toggle('dsh-pet-todo-bubble', this.todoOpen);
+    const alert = S.selectHermesAlert(this.hermesAlerts, this.pet.id, this.frozen);
+    if (this.todoOpen || !alert) {
+      this.hermesPanel?.dispose();
+      this.hermesPanel = null;
+    }
     if (this.todoOpen) {
+      this.bubbleSlot = 'todo';
       this.bubble.classList.remove('is-whisper', 'is-clickable', S.MEME_BUBBLE_CLASS);
       this.bubble.classList.add('is-on');
       window.__dshPetDebug.lastBubbleTitle = '待办事项';
+      this.syncInputBusy();
+      return;
+    }
+    if (alert) {
+      this.bubbleSlot = 'hermes';
+      if (!this.hermesPanel) {
+        this.bubble.replaceChildren();
+        this.hermesPanel = S.createHermesAlertPanel({
+          baseUrl: BASE,
+          open: (url) => window.petBridge.openHermesConversation(url),
+        });
+        this.hermesPanel.el.addEventListener('pointerdown', () => window.petBridge.requestKeyboardFocus());
+        this.bubble.appendChild(this.hermesPanel.el);
+      }
+      this.hermesPanel.update({ alert, stale: this.hermesAlerts.stale, count: this.hermesAlerts.alerts.length });
+      this.bubble.classList.remove('is-whisper', S.MEME_BUBBLE_CLASS);
+      this.bubble.classList.add('is-on', 'is-clickable');
+      window.__dshPetDebug.lastBubbleTitle = alert.title;
       this.syncInputBusy();
       return;
     }

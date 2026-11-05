@@ -16,6 +16,8 @@ import { createWorkStatusBridge } from './plugin/work-status-bridge.ts';
 import { registerTodoReminders } from './plugin/todo-reminders.ts';
 import { createVoiceService } from './voice/speak.ts';
 import { TODO_FILE_NAME, TodoStore } from './todo/store.ts';
+import { createHermesAlerts, HERMES_STATE_FILE } from './hermes-alerts.ts';
+import { startHermesPolling } from './hermes-poll.ts';
 import { join } from 'node:path';
 import type { PetRouteDeps } from './routes/types.ts';
 
@@ -68,6 +70,19 @@ export function apply(ctx: any): void {
 
   // 待办清单：一份用户级数据（不分宠物），落盘在插件数据根；提醒循环与 /todos 路由共用同一个实例。
   const todos = new TodoStore({ file: join(userRoot, TODO_FILE_NAME), log });
+  const hermesAlerts = createHermesAlerts({
+    file: join(userRoot, HERMES_STATE_FILE),
+    state,
+    petId: () => {
+      try {
+        const pets = effectivePetList().filter((pet) => pet.display !== 'none');
+        return String(pets.find((pet) => pet.id === 'main')?.id ?? pets[0]?.id ?? '');
+      } catch {
+        return '';
+      }
+    },
+  });
+  ctx.effect(() => startHermesPolling({ userRoot, alerts: hermesAlerts }), 'dsh-pet: Hermes read-only alerts');
 
   const desktopHelper = createDesktopHelper({
     ctx,
@@ -89,6 +104,7 @@ export function apply(ctx: any): void {
     ...sessionNotify,
     ctx,
     todos,
+    hermesAlerts,
     // 语音合成：缓存落 userRoot，失败只留日志，不打断宿主
     voice: createVoiceService({ userRoot, log }),
   };

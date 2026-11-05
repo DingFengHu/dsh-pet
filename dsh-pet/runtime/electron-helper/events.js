@@ -273,6 +273,16 @@ function applyMenuLeaf(leaf) {
   for (const s of sprites) s.menuItems = items;
 }
 
+/** Hermes 快照只更新独立槽，不触发动作或移动。 */
+function applyHermesAlertsLeaf(leaf) {
+  const snapshot = S.readHermesAlerts(leaf);
+  if (!snapshot) return;
+  for (const sprite of sprites) {
+    sprite.hermesAlerts = snapshot;
+    sprite.renderBubble();
+  }
+}
+
 /** 跑一拍 /state。返回 true = 按长轮询命中（宿主支持长轮询，可以立刻再请求）。 */
 async function pollStateOnce() {
   try {
@@ -289,12 +299,18 @@ async function pollStateOnce() {
       stateBaseline = S.flattenCounters(s); // 首拉：只记基线，不渲染（避免启动/重载时重放旧气泡）
       // 第三方菜单项是状态而不是事件：首拉就要装上，否则 helper 重启后要等下次注册才出现
       applyMenuLeaf(s.sections ? s.sections.menu : null);
+      // 锁与提醒都是快照，先恢复锁再展示提醒，避免首帧绕过占用锁。
+      for (const [petId, leaves] of Object.entries(s.pets)) {
+        if (leaves.lock) applyLockLeaf(petId, leaves.lock);
+      }
+      applyHermesAlertsLeaf(s.sections.hermesAlerts);
       return true;
     }
     for (const change of S.takeChanged(s, stateBaseline)) {
       if (change.leaf.data === null) continue;
       if (change.path === 'sections.workStatus') applyWorkStatusLeaf(change.leaf);
       else if (change.path === 'sections.menu') applyMenuLeaf(change.leaf);
+      else if (change.path === 'sections.hermesAlerts') applyHermesAlertsLeaf(change.leaf);
       else if (change.path.startsWith('pets.') && change.path.endsWith('.say')) {
         // 宠物 id 允许含点号：按前缀/后缀切片，绝不 split('.')
         applySayLeaf(change.path.slice('pets.'.length, -'.say'.length), change.leaf);

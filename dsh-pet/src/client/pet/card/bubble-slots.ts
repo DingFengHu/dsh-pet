@@ -2,9 +2,11 @@
  * 气泡单槽：待办、说话、工作状态气泡的显隐、停留计时与优先级选择。
  * 不负责何时点亮与动画联动：tick 判定、抽动画、打日志都在 PetCard；也不负责外观，哑组件在 client/bubble.ts。
  * 依赖注入的 react 与两个气泡组件；三个停留计时器都归本模块清理。
- * 不变量：同一时刻只渲染一个气泡，优先级依次为终态任务、说话、余额、非终态任务。
+ * 不变量：同一时刻只渲染一个气泡，提醒占槽不改其他气泡的状态与停留计时。
  * @module dsh-pet/src/client/pet/card/bubble-slots
  */
+import type { HermesAlert } from '../../../shared/hermes-alerts.ts';
+import type { HermesAlertView } from '../../../shared/hermes-alert-panel.ts';
 import {
   BUBBLE_HOLD_IDLE,
   reduceBubbleHold,
@@ -18,12 +20,14 @@ import type * as ReactNS from 'react';
 import type { jsx } from 'react/jsx-runtime';
 
 /** 当前该挂哪个气泡；`none` 表示哪个条件都不成立。 */
-export type BubbleSlot = 'todo' | 'work-terminal' | 'whisper' | 'work' | 'none';
+export type BubbleSlot = 'todo' | 'hermes' | 'work-terminal' | 'whisper' | 'work' | 'none';
 
 /** 优先级判定的输入：全部是渲染期的既成事实，判定本身不产生副作用。 */
 export interface BubbleSlotInput {
   /** 待办面板是否打开；打开时独占槽位，其余气泡一律让位。 */
   todoOn: boolean;
+  /** 已过目标与锁筛选的提醒是否存在。 */
+  hermesOn?: boolean;
   /** 工作状态是否为终态（success / error）。 */
   workTerminal: boolean;
   /** 工作气泡是否点亮。 */
@@ -49,6 +53,7 @@ export interface BubbleSlotInput {
 export function decideBubbleSlot(input: BubbleSlotInput): BubbleSlot {
   // 面板是用户主动打开的窗口：它占槽时其余气泡一律让位，关掉后按原规则恢复。
   if (input.todoOn) return 'todo';
+  if (input.hermesOn) return 'hermes';
   if (input.workTerminal && input.workOn && input.workText && input.workStatusEnabled) return 'work-terminal';
   if (input.whisperOn && input.whisperText) return 'whisper';
   if (input.workOn && input.workText && input.workStatusEnabled) return 'work';
@@ -85,12 +90,18 @@ export type TodoBubbleComponent = (props: { on: boolean; onClose: () => void }) 
 export interface BubbleComponents {
   /** 待办面板气泡。 */
   todoBubble: TodoBubbleComponent;
+  /** 共用 Hermes 提醒内容的外壳。 */
+  hermesBubble: (props: HermesAlertView) => ReactNode;
   /** 说话气泡。 */
   whisperBubble: WhisperBubbleComponent;
 }
 
 /** 每次渲染由 PetCard 提供的视图输入。 */
 export interface BubbleSlotsInput {
+  /** 目标宠物当前首条提醒，锁定时为 null。 */
+  hermesAlert?: HermesAlert | null;
+  hermesStale?: boolean;
+  hermesCount?: number;
   /** 配置是否启用工作状态联动。 */
   workStatusEnabled: boolean;
   /** 工作状态是否处于终态。 */
@@ -238,6 +249,7 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     const node = (): ReactNode => {
       const slot = decideBubbleSlot({
         todoOn,
+        hermesOn: !!input.hermesAlert,
         workTerminal: input.workTerminal,
         workOn,
         workText,
@@ -246,6 +258,13 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
         whisperText,
       });
       if (slot === 'todo') return h(TodoBubble, { on: todoOn, onClose: hideTodo });
+      if (slot === 'hermes' && input.hermesAlert) {
+        return h(components.hermesBubble, {
+          alert: input.hermesAlert,
+          stale: input.hermesStale ?? false,
+          count: input.hermesCount ?? 1,
+        });
+      }
       if (slot === 'whisper') {
         return whisperText === null
           ? null

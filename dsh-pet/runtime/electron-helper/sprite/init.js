@@ -63,6 +63,8 @@ Object.assign(PetSprite.prototype, {
   initPanels() {
     // 第三方菜单项（/state 的 sections.menu 快照）：只在右键那一刻拼进菜单，不参与渲染。
     this.menuItems = [];
+    this.hermesAlerts = null;
+    this.hermesPanel = null;
     // 右键菜单（统一自绘组件，两端共用同一份：树+渲染均来自 shared-core）
     this.menuOpen = false; // 菜单开启期间强制整窗可交互（悬停菜单不触发穿透翻转）
     this.menuClose = null; // 当前菜单的 close()（打开时挂载，关闭后置空）

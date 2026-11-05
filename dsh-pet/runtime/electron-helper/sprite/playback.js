@@ -161,6 +161,7 @@ Object.assign(PetSprite.prototype, {
       return;
     }
     console.log(stamp + ' 占用锁解除：恢复');
+    this.renderBubble();
     // 解冻：非终态工作状态回档位循环，否则回 idle 一次，播完由 handleEnded 接回随机链。
     if (this.resumeWorkStatusAnim()) return;
     if (this.animations.idle.length) this.playOnce(S.pick(this.animations.idle, this.anim));

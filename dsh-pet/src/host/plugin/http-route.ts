@@ -64,6 +64,29 @@ export function createHttpRoute(deps: PetRouteDeps): { handlePetRoute: HttpRoute
   return { handlePetRoute };
 }
 
+/** 只收同源回环 HTTP 请求，桌面受信管道仍直接复用业务路由。 */
+export function isLocalHermesRequest(req: IncomingMessage): boolean {
+  const address = req.socket.remoteAddress;
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address ?? '')) return false;
+  try {
+    const host = new URL(`http://${req.headers.host ?? ''}`);
+    if (
+      !['localhost', '127.0.0.1', '[::1]'].includes(host.hostname) ||
+      host.username ||
+      host.password ||
+      host.pathname !== '/'
+    )
+      return false;
+    if (!req.headers.origin) return req.headers['sec-fetch-site'] !== 'cross-site';
+    const origin = new URL(req.headers.origin);
+    return (
+      ['http:', 'https:'].includes(origin.protocol) && origin.host === host.host && origin.origin === req.headers.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 把前缀路由挂到宿主 webServer，随插件卸载自动摘除。
  * @param ctx - 宿主上下文。
@@ -82,6 +105,19 @@ export function registerHttpRoute(ctx: HostContext, handlePetRoute: HttpRouteHan
           const onClose = (): void => abort.abort();
           res.on('close', onClose);
           try {
+            if (
+              decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname) ===
+                `${ROUTE_SEGMENT}/hermes/ack` &&
+              !isLocalHermesRequest(req)
+            ) {
+              res.off('close', onClose);
+              sendJson(
+                res,
+                403,
+                failureBody('bad-request', 'Hermes local acknowledgement requires same-origin loopback'),
+              );
+              return;
+            }
             // PATCH 也带体（待办的部分更新）；GET / DELETE 不读，避免无谓地等一个不会来的结束事件。
             const readsBody = req.method === 'PUT' || req.method === 'POST' || req.method === 'PATCH';
             const body = readsBody ? await readBody(req) : undefined;

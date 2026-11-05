@@ -4,6 +4,7 @@
  * 需要改 React 状态时走自己的 setter，不向上要回调。
  * @module dsh-pet/src/client/pet/card/props
  */
+import type { HermesAlerts } from '../../../shared/hermes-alerts.ts';
 import type * as ReactNS from 'react';
 import type { PetCollisionSlot } from '../../../shared/physics.ts';
 import type { LockState, PositionMode, SayCue, PetFacing } from '../../../shared/state.ts';
@@ -15,6 +16,8 @@ import type { RuntimePet } from '../types.ts';
 export interface PetCardProps {
   /** 成品配置。 */
   cfg: RuntimePet;
+  /** 当前 Hermes 提醒快照，不是一次性说话指令。 */
+  hermesAlerts?: HermesAlerts | null;
   /** 工作状态快照。 */
   workStatus: WorkStatusSnapshot | null;
   /** 工作状态变化次数。 */

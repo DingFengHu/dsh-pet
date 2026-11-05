@@ -285,6 +285,48 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
+  /dsh-pet-7340/hermes/ack:
+    post:
+      tags: [Action]
+      operationId: acknowledgeHermesAlert
+      summary: 仅在本地确认一条 Hermes 提醒
+      description: |
+        知道了只持久化桌宠本地确认，不批准、回答、取消或重跑 Hermes 任务。
+        请求只接受当前提醒完整 id。需要同源本机请求，来源离线仍可本地确认。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  pattern: "^hermes-(decision|cron)-[a-f0-9]{64}$"
+      responses:
+        "200":
+          description: 检查 ok 字段，true 表示本地确认已持久化，false 表示无效或不存在的提醒。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          description: 非法 JSON。
+        "403":
+          description: 不是允许的本机同源请求。
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "413":
+          description: 请求体超过 256 字节。
+        "500":
+          description: 本地确认写盘失败，提醒未消除。
+
   /dsh-pet-7340/focus-session:
     post:
       tags: [Action]
@@ -2801,6 +2843,36 @@ components:
               $ref: "#/components/schemas/ConfigLeaf"
             focusSession:
               $ref: "#/components/schemas/FocusSessionLeaf"
+            hermesAlerts:
+              type: object
+              description: Hermes 当前提醒快照，首拉需要恢复，不是瞬时说话事件。
+              required: [counter, data]
+              properties:
+                counter:
+                  type: integer
+                data:
+                  type: [object, "null"]
+                  properties:
+                    petId:
+                      type: string
+                    stale:
+                      type: boolean
+                    error:
+                      type: string
+                    alerts:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, title, message]
+                        properties:
+                          id:
+                            type: string
+                          title:
+                            type: string
+                          message:
+                            type: string
+                          url:
+                            type: string
         pets:
           type: object
           description: 每只宠物各自一份；键是宠物 id（**可含点号，勿切分**）

@@ -162,7 +162,14 @@ describe('/state —— 轮询统一状态', () => {
       sections: Record<string, { counter: number; data: unknown }>;
       pets: Record<string, unknown>;
     };
-    assert.deepEqual(Object.keys(body.sections).sort(), ['config', 'focusSession', 'menu', 'notify', 'workStatus']);
+    assert.deepEqual(Object.keys(body.sections).sort(), [
+      'config',
+      'focusSession',
+      'hermesAlerts',
+      'menu',
+      'notify',
+      'workStatus',
+    ]);
     assert.equal(body.sections.notify.counter, 0, '没人写过时 counter=0（前端首拉当基线）');
     assert.equal(body.sections.notify.data, null);
     assert.equal(body.sections.config.data, null, '配置变更信号也没人写过（counter=0 / data=null）');

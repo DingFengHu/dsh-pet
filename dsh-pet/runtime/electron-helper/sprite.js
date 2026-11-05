@@ -102,6 +102,7 @@ class PetSprite {
 
   dispose() {
     this.ac.abort();
+    this.hermesPanel?.dispose();
     this.inputRegionMutation.disconnect();
     this.inputRegionResize.disconnect();
     this.inputRegionElements.clear();

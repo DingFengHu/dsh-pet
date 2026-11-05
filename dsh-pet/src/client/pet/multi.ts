@@ -1,10 +1,11 @@
 /**
  * 多开容器：拉一次成品配置、长轮询 /state 叶子，再把指令分发给对应的宠物卡。
  * 只做「配置 → 渲染列表」与「叶子 → 每只宠物」的分发，不解释叶子语义、不画 DOM。
- * 必须始终成立：首拉只记基线，之后 counter 变化才分发；配置形状异常时显式报错，绝不用空列表清空。
+ * 必须始终成立：命令首拉只记基线，快照首拉恢复，之后按 counter 分发，配置异常不清空宠物。
  * @module dsh-pet/src/client/pet/multi
  */
 import type { FunctionComponent, ReactNode } from 'react';
+import { readHermesAlerts, type HermesAlerts } from '../../shared/hermes-alerts.ts';
 import { petBridge } from '../settings/bridge.ts';
 import { flattenConfigPets, isWebVisible } from '../../shared/config.ts';
 import { ROUTE_PATH } from '../../shared/constants.ts';
@@ -63,6 +64,7 @@ export function createPetMulti(
   return function PetMulti() {
     const [pets, setPets] = useState<Pet[]>([]);
     const [ready, setReady] = useState(false);
+    const [hermesAlerts, setHermesAlerts] = useState<HermesAlerts | null>(null);
     // 碰撞站场：每只 PetCard 注册槽位，纯 ref 同步，不触发重渲染。
     const arenaRef = useRef<{ slots: Record<string, PetCollisionSlot> }>({ slots: {} });
     // 工作状态：容器统一轮询 sections.workStatus，快照与 tick 驱动各宠物播档位动画。
@@ -174,6 +176,11 @@ export function createPetMulti(
       /** 分段叶子 → 消费端副作用；不认识的名字已被 resolveLeafPath 挡在外面。 */
       const applySection = (name: SectionLeafName, leaf: StateLeaf): void => {
         switch (name) {
+          case 'hermesAlerts': {
+            const snapshot = readHermesAlerts(leaf);
+            if (snapshot) setHermesAlerts(snapshot);
+            return;
+          }
           case 'config':
             // 配置被别处改过（唯一写方是 POST /pet-display），重新拉取并拍平。
             // 叶子 data 只是信号，配置本体太大，不能塞进 /state。
@@ -257,7 +264,11 @@ export function createPetMulti(
         // 最近一拍先留给同页消费者（petApi7340.getState）：它读的是同一个对象，不占连接。
         setStateSnapshot(s);
         if (baseline === null) {
-          baseline = flattenCounters(s); // 首拉只记基线，不渲染。
+          baseline = flattenCounters(s); // 命令只记基线，快照在首拉应用。
+          if (s.sections.hermesAlerts) applySection('hermesAlerts', s.sections.hermesAlerts);
+          for (const [petId, leaves] of Object.entries(s.pets)) {
+            if (leaves.lock) applyPetLeaf('lock', petId, leaves.lock);
+          }
           // 跳会话是一次性信号：页面没开时写下的那条会被首拉基线吞掉，这里按写入时刻补一次。
           applyFocusSession(s.sections.focusSession?.data);
           // 菜单项是当前状态而不是事件，首拉也必须装上，否则刷新后第三方菜单会一直为空。
@@ -298,6 +309,7 @@ export function createPetMulti(
           return h(Card, {
             key: p.id,
             cfg: p as RuntimePet,
+            hermesAlerts,
             workStatus: workOn ? workStatus : null,
             workStatusTick: workOn ? workStatusTick : 0,
             onFocusSession: jumpToSession,

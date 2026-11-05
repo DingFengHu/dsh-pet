@@ -11,6 +11,8 @@ import { ROUTE_PATH } from '../../../shared/constants.ts';
 import { resolveFontPx } from '../../../shared/fonts.ts';
 import { resolvePetSizePx } from '../../../shared/pet-size.ts';
 import { makeWhisperBubble } from '../../bubble.ts';
+import { makeHermesAlertBubble } from '../../hermes-alert-bubble.ts';
+import { selectHermesAlert } from '../../../shared/hermes-alerts.ts';
 import { makeTodoBubble } from '../../todo-bubble.ts';
 import { petBridge } from '../../settings.ts';
 import { createMenuActions, type MenuActions } from '../menu-actions.ts';
@@ -44,10 +46,11 @@ export function createCardRuntime(rt: PetRuntime) {
   const WhisperBubble = makeWhisperBubble({ h });
   /** 待办气泡：面板本体挂在自己身上，关闭按钮回调装配根。 */
   const TodoBubble = makeTodoBubble({ h, useEffect, useRef });
+  const HermesAlertBubble = makeHermesAlertBubble({ h, useEffect, useRef });
   /** 各气泡的单槽：显隐、停留计时与优先级都在这里。 */
   const useBubbleSlots = createBubbleSlots(
     { h, useState, useEffect, useRef },
-    { todoBubble: TodoBubble, whisperBubble: WhisperBubble },
+    { todoBubble: TodoBubble, whisperBubble: WhisperBubble, hermesBubble: HermesAlertBubble },
   );
   const useCardState = createCardState({ useState, useRef });
   const useLockFreeze = createLockFreeze({ useEffect, useRef });
@@ -61,6 +64,7 @@ export function createCardRuntime(rt: PetRuntime) {
   return function useCardRuntime(props: PetCardProps): CardViewProps {
     const { arena, cfg, lock, lockTick, menuItemsRef, workStatus } = props;
     const { onFocusSession } = props;
+    const [hermesFrozen, setHermesFrozen] = useState(lock?.locked === true && lock.expiresAt > Date.now());
 
     // 实际渲染宽度：百分比只在挂载与配置变更时按当次视口宽解析一次，拖窗口不跟随。
     // 物理、字号与 CSS 变量都吃这一个值——两处各算一次会让命中框与视觉错位。
@@ -122,6 +126,13 @@ export function createCardRuntime(rt: PetRuntime) {
     // 各气泡的单槽：显隐、停留计时与优先级都在 bubble-slots，这里只喂视图输入。
     const bubbles = useBubbleSlots({
       assetRoot: cfg.assetRoot,
+      hermesAlert: selectHermesAlert(
+        props.hermesAlerts,
+        cfg.id,
+        hermesFrozen || (lock?.locked === true && lock.expiresAt > Date.now()),
+      ),
+      hermesStale: props.hermesAlerts?.stale ?? false,
+      hermesCount: props.hermesAlerts?.alerts.length ?? 0,
       workStatusEnabled: cfg.workStatusEnabled,
       workTerminal: workStatus?.state === 'success' || workStatus?.state === 'error',
       workSessionId: workStatus?.sessionId ?? null,
@@ -213,12 +224,14 @@ export function createCardRuntime(rt: PetRuntime) {
       lock,
       lockTick,
       onFrozen: () => {
+        setHermesFrozen(true);
         // 光堵随机链不够：它只在动画播完时调用，不暂停会把当前这段播完才停。
         motion.stopMove();
         // 任务状态气泡：锁一生效就收掉，解冻不补亮。
         bubbles.hideWork();
       },
       onResumed: () => {
+        setHermesFrozen(false);
         // 解冻：非终态工作状态回档位循环，否则回 idle 一次，播完由动画链接回随机链。
         if (liveRef.current.flow?.resumeWorkStatusAnim() ?? false) return;
         if (petAnims.idle.length) {

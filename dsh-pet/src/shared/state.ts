@@ -2,7 +2,7 @@
  * 轮询状态（/state）的客户端侧纯逻辑：拉取、叶子拍平、与基线比对。
  * 不负责写状态——动作端点只回执，数据只有一个出口；路径只按已知前后缀解析成落点
  * （见 resolveLeafPath），绝不按点号切分，因为宠物 id 允许含点号。
- * 两端共用同一份；首拉只记基线不渲染，否则刷新页面会把旧气泡重放一遍。
+ * 两端共用同一份，首拉命令只记基线以免重放，当前快照由消费端单独恢复。
  * @module dsh-pet/src/shared/state
  */
 import { toWorkStatus, type WorkStatusSnapshot } from './work-status.ts';
@@ -113,7 +113,7 @@ export function takeChanged(s: PollState, baseline: Record<string, number>): Sta
 }
 
 /** `sections.<名>` 里会被消费端分发的那几个叶子。 */
-export type SectionLeafName = 'config' | 'workStatus' | 'notify' | 'menu' | 'focusSession';
+export type SectionLeafName = 'config' | 'workStatus' | 'notify' | 'menu' | 'focusSession' | 'hermesAlerts';
 
 /** `pets.<id>.<名>` 里会被消费端分发的那几个叶子。 */
 export type PetLeafName = 'say' | 'anim' | 'position' | 'throw' | 'lock';
@@ -123,7 +123,7 @@ export type LeafTarget =
   { where: 'section'; name: SectionLeafName } | { where: 'pet'; name: PetLeafName; petId: string };
 
 /** 分段叶子名的全集；新增 section 叶子时与 {@link SectionLeafName} 一起改。 */
-const SECTION_LEAF_NAMES = ['config', 'workStatus', 'notify', 'menu', 'focusSession'] as const;
+const SECTION_LEAF_NAMES = ['config', 'workStatus', 'notify', 'menu', 'focusSession', 'hermesAlerts'] as const;
 
 /** 宠物叶子名的全集；新增宠物叶子时与 {@link PetLeafName} 一起改。 */
 const PET_LEAF_NAMES = ['say', 'anim', 'position', 'throw', 'lock'] as const;
@@ -304,10 +304,11 @@ export function readThrow(leaf: StateLeaf): { angle: number; power: number } | n
 /** 动作端点：POST 一次，返回是否成功。
  *  动作不返回数据——数据只有 /state 一个出口。调用方收到 ok 后不需要再做别的：动作写叶子会让
  *  顶层 counter 变化，挂着的长轮询那一拍立刻返回。 */
-export async function postAction(baseUrl: string, body?: unknown): Promise<boolean> {
+export async function postAction(baseUrl: string, body?: unknown, signal?: AbortSignal): Promise<boolean> {
   try {
     const res = await fetch(baseUrl, {
       method: 'POST',
+      ...(signal === undefined ? {} : { signal }),
       ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     });
     if (!res.ok) return false;
