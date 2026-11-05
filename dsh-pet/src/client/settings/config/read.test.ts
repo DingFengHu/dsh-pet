@@ -48,19 +48,6 @@ describe('readMainConfig —— 成品聚合 → 表单补丁', () => {
     );
   });
 
-  test('模型选择只写一半：整对都当没写（宿主会按非法拒绝）', () => {
-    const half = readMainConfig({ main: { pets: [], whisperModel: { provider: 'openai' } } });
-    assert.equal(half?.whisperModel, undefined);
-    const full = readMainConfig({ main: { pets: [], chatModel: { provider: 'a', model: 'b' } } });
-    assert.deepEqual(full?.chatModel, { provider: 'a', model: 'b' });
-  });
-
-  test('数值字段：负数与非数字当没写，0 是合法值', () => {
-    assert.equal(readMainConfig({ main: { pets: [], chatMemoryRounds: -1 } })?.chatMemoryRounds, undefined);
-    assert.equal(readMainConfig({ main: { pets: [], chatMemoryRounds: 'x' } })?.chatMemoryRounds, undefined);
-    assert.equal(readMainConfig({ main: { pets: [], chatImageLimit: 0 } })?.chatImageLimit, 0);
-  });
-
   test('布尔字段缺失就不进补丁，避免把默认值当用户选择写回去', () => {
     const patch = readMainConfig({ main: { pets: [] } });
     assert.equal('notificationsEnabled' in (patch ?? {}), false);
@@ -70,24 +57,12 @@ describe('readMainConfig —— 成品聚合 → 表单补丁', () => {
   });
 
   test('语音细分开关：布尔原样带出，缺失或非布尔不进补丁', () => {
-    const patch = readMainConfig({ main: { pets: [], voiceWhisperEnabled: true, voiceTodoEnabled: false } });
-    assert.equal(patch?.voiceWhisperEnabled, true);
+    const patch = readMainConfig({ main: { pets: [], voiceTodoEnabled: false } });
     assert.equal(patch?.voiceTodoEnabled, false, 'false 是合法值，不能当作没写');
     const none = readMainConfig({ main: { pets: [] } });
-    assert.equal('voiceWhisperEnabled' in (none ?? {}), false);
     assert.equal('voiceTodoEnabled' in (none ?? {}), false);
     const bad = readMainConfig({ main: { pets: [], voiceTodoEnabled: 'yes' } });
     assert.equal('voiceTodoEnabled' in (bad ?? {}), false, '非布尔当作没写');
-  });
-
-  test('对话动作联动开关：布尔原样带出，缺失或非布尔不进补丁', () => {
-    assert.equal(readMainConfig({ main: { pets: [], chatAnimationEnabled: false } })?.chatAnimationEnabled, false);
-    assert.equal('chatAnimationEnabled' in (readMainConfig({ main: { pets: [] } }) ?? {}), false);
-    assert.equal(
-      'chatAnimationEnabled' in (readMainConfig({ main: { pets: [], chatAnimationEnabled: 1 } }) ?? {}),
-      false,
-      '非布尔当作没写',
-    );
   });
 
   test('条目人设原样带出，供「留空时跟随什么」的预览', () => {

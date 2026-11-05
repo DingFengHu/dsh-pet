@@ -9,9 +9,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { modelCandidates } from '../host/model-selection.ts';
-import { generateWhisper } from '../host/whisper.ts';
-import { STANDALONE_PROVIDER, createStandaloneContext } from './context.ts';
+import { createStandaloneContext } from './context.ts';
 import type { RegisteredRoute, StandaloneLogger } from './context.ts';
 
 /** 静默日志器：测试只断言行为，不刷控制台 */
@@ -36,25 +34,6 @@ const onOf = (context: Standalone): (() => unknown) => context.ctx.on as () => u
 const commandsOf = (context: Standalone): { register(): unknown } => context.ctx.commands as { register(): unknown };
 const webServerOf = (context: Standalone): { port: number; register(spec: RegisteredRoute): unknown } =>
   context.ctx.webServer as { port: number; register(spec: RegisteredRoute): unknown };
-const agentOf = (context: Standalone): { currentSelection(): { provider: string; model: string } } =>
-  context.ctx.agentDefaultModel as { currentSelection(): { provider: string; model: string } };
-const credentialsOf = (context: Standalone): { resolve(ref: unknown): Promise<unknown> } =>
-  context.ctx.credentials as { resolve(ref: unknown): Promise<unknown> };
-const llmOf = (
-  context: Standalone,
-): {
-  listProviders(): unknown[];
-  listModels(provider: string): Promise<unknown[]>;
-  // 形状必须是 AsyncIterable（DSH 的 llm.stream 签名）。这里若写成 Promise，
-  // 就与替身实现犯了同一个错 —— 也正是这个断言让 0.3.4 的类型检查与真实契约脱节。
-  stream(options: unknown): AsyncIterable<unknown>;
-} =>
-  context.ctx.llm as {
-    listProviders(): unknown[];
-    listModels(provider: string): Promise<unknown[]>;
-    stream(options: unknown): AsyncIterable<unknown>;
-  };
-
 describe('createStandaloneContext —— 与 Cordis 对齐的语义', () => {
   test('effect 同步执行、收集释放函数；dispose 逆序释放且等待异步释放', async () => {
     const context = createStandaloneContext({ port: 1, logger: silentLogger() });
@@ -118,40 +97,5 @@ describe('createStandaloneContext —— 与 Cordis 对齐的语义', () => {
     const context = createStandaloneContext({ port: 1, logger: silentLogger() });
     assert.equal(typeof onOf(context)(), 'function');
     assert.equal(typeof commandsOf(context).register(), 'function');
-  });
-});
-
-describe('服务替身的降级口径 —— 显式失败，不假装成功', () => {
-  test('currentSelection 的 model 为空 → 模型候选链为空（生成停在候选阶段）', () => {
-    const context = createStandaloneContext({ port: 1, logger: silentLogger() });
-    const selection = agentOf(context).currentSelection();
-    assert.equal(selection.provider, STANDALONE_PROVIDER);
-    // model 必须为空：model-selection.currentModel() 以「provider 与 model 都非空」为有效条件，
-    // 空 model 于是让候选链为空 —— 这是"独立模式不产生任何模型调用"的结构性保证，
-    // 而不是靠某个端点上的 if。
-    assert.equal(selection.model, '');
-    assert.deepEqual(modelCandidates(context.ctx as never, undefined), []);
-  });
-
-  test('碎碎念用这份 ctx 得到结构化失败 provider-missing（不联网、不编文案）', async () => {
-    const context = createStandaloneContext({ port: 1, logger: silentLogger() });
-    const result = await generateWhisper(context.ctx as never, { system: '你是一只桌宠' });
-    assert.deepEqual(result, { ok: false, reason: 'provider-missing', message: '当前对话未配置模型' });
-  });
-
-  test('凭证恒不可得；llm 清单为空、生成入口是"迭代即失败"的 async iterable', async () => {
-    const context = createStandaloneContext({ port: 1, logger: silentLogger() });
-    assert.equal(await credentialsOf(context).resolve('DEEPSEEK_API_KEY'), undefined);
-    const llm = llmOf(context);
-    assert.deepEqual(llm.listProviders(), []);
-    assert.deepEqual(await llm.listModels('deepseek'), []);
-    // 契约：stream() 返回的是 AsyncIterable（DSH 的 llm.stream 签名），不是 Promise。
-    // 旧断言写成 "stream() 自己 reject"，把错误的契约固化了下来：它从未走 for await，
-    // 所以全绿；而真实集成一跑就崩（TypeError + 无人接管的 rejected promise）。
-    const streamed = llm.stream({});
-    assert.equal(typeof streamed[Symbol.asyncIterator], 'function');
-    await assert.rejects(async () => {
-      for await (const chunk of streamed) void chunk;
-    }, /独立模式未接入模型/);
   });
 });

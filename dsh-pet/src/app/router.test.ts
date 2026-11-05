@@ -3,7 +3,7 @@ import { request as httpRequest } from 'node:http';
 import { test } from 'node:test';
 import type { RegisteredRoute } from '../standalone/context.ts';
 import { createRequestSecurity } from '../standalone/request-security.ts';
-import { MAX_REQUEST_BYTES, MAX_SETTINGS_BYTES } from '../standalone/request-body.ts';
+import { MAX_REQUEST_BYTES } from '../standalone/request-body.ts';
 import { startRouter } from './router.ts';
 
 async function start(
@@ -145,14 +145,13 @@ test('app caps request bodies before plugins/settings and catches synchronous an
   );
   try {
     const headers = { 'X-DSH-Pet-Token': server.security.token };
-    for (const [path, bytes] of [
-      ['/dsh-pet-7340/config', MAX_REQUEST_BYTES],
-      ['/standalone-ai/settings', MAX_SETTINGS_BYTES],
-    ] as const) {
-      const response = await fetch(server.base + path, { method: 'POST', headers, body: 'x'.repeat(bytes + 1) });
-      assert.equal(response.status, 413);
-      await response.text();
-    }
+    const tooLarge = await fetch(server.base + '/dsh-pet-7340/config', {
+      method: 'POST',
+      headers,
+      body: 'x'.repeat(MAX_REQUEST_BYTES + 1),
+    });
+    assert.equal(tooLarge.status, 413);
+    await tooLarge.text();
     assert.equal(calls, 0);
     for (const path of ['/sync', '/async']) {
       const response = await fetch(server.base + '/dsh-pet-7340' + path, { headers });

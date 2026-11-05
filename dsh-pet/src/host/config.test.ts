@@ -18,9 +18,7 @@ import {
   migrateUserConfig,
   readAllConfig,
   readUserConfig,
-  removeRoundsByTs,
   saveUserConfig,
-  sliceMemoryRounds,
   syncUserConfigFromDefault,
   userConfigUnparsable,
   type ConfigPaths,
@@ -1470,72 +1468,5 @@ describe('文件宠物条目 —— 全局默认（用户层作基座）+ 种类
       assert.deepEqual(out.pig.eventsRefreshSec, BASE.eventsRefreshSec, JSON.stringify(bad));
       assert.deepEqual(out.main.eventsRefreshSec, BASE.eventsRefreshSec, JSON.stringify(bad));
     }
-  });
-});
-
-describe('sliceMemoryRounds —— chatMemoryRounds=0 必须真正不带历史（防 -0 陷阱回归）', () => {
-  // 4 条消息 = 2 轮（1 轮 = 1 问 1 答）
-  const msgs = ['u1', 'a1', 'u2', 'a2'];
-
-  test('rounds=0 → 空列表（曾因 slice(-0) 返回整个数组而带上全部历史）', () => {
-    assert.deepEqual(sliceMemoryRounds(msgs, 0), []);
-  });
-
-  test('rounds>0 → 截尾部 rounds 轮', () => {
-    assert.deepEqual(sliceMemoryRounds(msgs, 1), ['u2', 'a2']);
-    assert.deepEqual(sliceMemoryRounds(msgs, 2), msgs);
-  });
-
-  test('rounds 超过消息数 → 全量（不多不少）', () => {
-    assert.deepEqual(sliceMemoryRounds(msgs, 99), msgs);
-  });
-
-  test('负数 / NaN 兜底按 0 → 空列表（不产出荒谬的 slice 行为）', () => {
-    assert.deepEqual(sliceMemoryRounds(msgs, -1), []);
-    assert.deepEqual(sliceMemoryRounds(msgs, Number.NaN), []);
-  });
-
-  test('rounds 为小数 → 先向下取整再截（与 memoryRounds 的 Math.floor 一致）', () => {
-    assert.deepEqual(sliceMemoryRounds(msgs, 1.9), ['u2', 'a2']);
-  });
-
-  test('rounds=0 且消息列表原本为空 → 空', () => {
-    assert.deepEqual(sliceMemoryRounds([], 0), []);
-  });
-});
-
-describe('removeRoundsByTs —— 按轮删除（一轮两条共享 ts，成对走）', () => {
-  const msgs = [
-    { content: 'u1', ts: 1000 },
-    { content: 'a1', ts: 1000 },
-    { content: 'u2', ts: 2000 },
-    { content: 'a2', ts: 2000 },
-  ];
-
-  test('命中的轮成对移除，其余原样保留', () => {
-    const r = removeRoundsByTs(msgs, [1000]);
-    assert.deepEqual(
-      r.messages.map((m) => m.content),
-      ['u2', 'a2'],
-    );
-    assert.equal(r.removed, 2);
-  });
-
-  test('不存在的 ts → 不改动，removed=0', () => {
-    const r = removeRoundsByTs(msgs, [999]);
-    assert.deepEqual(r.messages, msgs);
-    assert.equal(r.removed, 0);
-  });
-
-  test('空集合 → 一条都不删（清空是调用方的另一条分支，不能靠空集合表达）', () => {
-    const r = removeRoundsByTs(msgs, []);
-    assert.equal(r.messages.length, msgs.length);
-    assert.equal(r.removed, 0);
-  });
-
-  test('全部命中 → 空列表，removed 等于原长度', () => {
-    const r = removeRoundsByTs(msgs, [1000, 2000]);
-    assert.deepEqual(r.messages, []);
-    assert.equal(r.removed, 4);
   });
 });

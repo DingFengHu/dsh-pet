@@ -16,7 +16,6 @@ import {
   buildSaveBody,
   loadConfig,
   loadMeta,
-  loadModelCatalog,
   saveConfig,
   syncConfig,
   type SaveFields,
@@ -88,7 +87,7 @@ function json0(): Response {
   return json({ main: { pets: [] } });
 }
 
-describe('loadMeta / loadModelCatalog —— 读元信息与候选清单', () => {
+describe('loadMeta —— 读元信息', () => {
   test('meta：2xx 返回原文，非 2xx 返回 null', async () => {
     await withFetch(
       () => json({ user: 'u', default: 'd', animations: 'a' }),
@@ -100,27 +99,6 @@ describe('loadMeta / loadModelCatalog —— 读元信息与候选清单', () =>
       () => json({}, 404),
       async () => {
         assert.equal(await loadMeta(), null);
-      },
-    );
-  });
-
-  test('候选清单：providers 是数组才认，否则返回 null（选择器显示拉取失败）', async () => {
-    await withFetch(
-      () => json({ providers: [{ id: 'a', name: 'A', models: [] }] }),
-      async () => {
-        assert.deepEqual(await loadModelCatalog(), [{ id: 'a', name: 'A', models: [] }]);
-      },
-    );
-    await withFetch(
-      () => json({ providers: 'nope' }),
-      async () => {
-        assert.equal(await loadModelCatalog(), null);
-      },
-    );
-    await withFetch(
-      () => json({}, 503),
-      async () => {
-        assert.equal(await loadModelCatalog(), null);
       },
     );
   });
@@ -225,28 +203,16 @@ describe('buildSaveBody —— 请求体字段', () => {
       pets: [],
       notificationsEnabled: true,
       clickSoundEnabled: false,
-      whisperImageEnabled: false,
-      chatImageEnabled: false,
-      chatAnimationEnabled: false,
       confineToScreen: false,
       trayEnabled: true,
       voiceEnabled: true,
       voiceName: 'zh-CN-XiaoyiNeural',
       physics: {},
-      whisperModel: { provider: '', model: '' },
-      chatModel: { provider: '', model: '' },
-      chatMemoryRounds: 5,
-      chatImageLimit: 10,
       font: {},
       animationWeights: { idle: 10, turn: 5, move: 5 },
     } as unknown as SaveFields;
     assert.deepEqual(Object.keys(buildSaveBody(fields)).sort(), [
       'animationWeights',
-      'chatAnimationEnabled',
-      'chatImageEnabled',
-      'chatImageLimit',
-      'chatMemoryRounds',
-      'chatModel',
       'clickSoundEnabled',
       'confineToScreen',
       'font',
@@ -258,9 +224,6 @@ describe('buildSaveBody —— 请求体字段', () => {
       'voiceName',
       'voiceTodoEnabled',
       'voiceVolume',
-      'voiceWhisperEnabled',
-      'whisperImageEnabled',
-      'whisperModel',
     ]);
   });
 
@@ -269,20 +232,13 @@ describe('buildSaveBody —— 请求体字段', () => {
       pets: [{ id: 'pet-1' }],
       notificationsEnabled: false,
       clickSoundEnabled: true,
-      whisperImageEnabled: true,
-      chatImageEnabled: true,
-      chatAnimationEnabled: true,
       confineToScreen: true,
       trayEnabled: false,
       physics: { gravity: 3 },
-      whisperModel: { provider: 'a', model: 'b' },
-      chatModel: { provider: '', model: '' },
-      chatMemoryRounds: 0,
-      chatImageLimit: 3,
       font: { size: 20 },
     } as unknown as SaveFields;
     const body = buildSaveBody(fields);
-    assert.equal(body.chatMemoryRounds, 0);
+    assert.equal(body.clickSoundEnabled, true);
     assert.deepEqual(body.physics, { gravity: 3 });
     assert.equal(body.notificationsEnabled, false);
   });
