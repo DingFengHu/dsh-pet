@@ -33,21 +33,11 @@ export const de: Record<Key, string> = {
   'shortcut.capture': 'Bildschirmfoto in den Chat',
   shortcutCardTitle: 'Tastenkürzel',
   shortcutCardHint: 'Aufgeklappt zwei Gruppen: Pet-Tastenkürzel und globale Tastenkürzel.',
-  shortcutRowChat: 'Chat öffnen',
-  shortcutRowHold: 'Zum Sprechen halten',
-  shortcutRowHear: 'Spracheingabe',
-  shortcutRowCapture: 'Bildschirmfoto',
-  shortcutRowPaste: 'Bild einfügen',
   shortcutRowTodo: 'Aufgaben',
-  shortcutRowSleep: 'Schlafen / Aufwachen',
   shortcutRowDisplay: 'Anzeigeposition',
-  shortcutRowSidebar: 'Seitenleisten-Chat öffnen',
   shortcutGroupPet: 'Pet-Tastenkürzel',
   shortcutGroupPetHint:
     'Im Web genügt der Zeiger auf dem Pet. Im Desktop-Fenster zuerst auf das Pet klicken, damit es den Tastaturfokus bekommt.',
-  shortcutGroupGlobal: 'Globale Tastenkürzel',
-  shortcutGroupGlobalHint:
-    'Werden von DSH im Web und im Desktop-Fenster verteilt; änderbar unter Einstellungen → Allgemein → Tastenkürzel.',
   petsLabel: 'Pet-Liste',
   add: 'Pet hinzufügen',
   remove: 'Entfernen',
@@ -65,15 +55,6 @@ export const de: Record<Key, string> = {
   nameLabel: 'Name',
   nameHint:
     'Anzeigename: erscheint beim Hovern über dem Pet und fließt in die KI-Persona ein („Dein Name ist X"). Doppelt erlaubt; leer = es gilt die Pet-ID.',
-  personaLabel: 'Persona (optional)',
-  personaHint:
-    'Gilt nur für dieses Pet. Leer lassen = Persona des Eintrags übernehmen – der graue Text im Feld ist genau diese. Das tatsächlich an das Modell gesendete System = dieser Text + automatisch angehängtem Hinweis „Dein Name ist <Name>" + aktuellem Zeitkontext; Name und Datum hier also nicht wiederholen.',
-  personaCount: '{n} Zeichen',
-  balanceEnabled: 'Guthaben-Funktion',
-  balanceEnabledHint: 'Wenn aktiv, spielt dieses Pet Guthaben-Animationen und zeigt die Guthaben-Blase.',
-  whisperEnabled: 'Flüstern',
-  whisperEnabledHint:
-    'Wenn aktiv, erzeugt dieses Pet regelmäßig per KI einen Satz und spielt die Flüstern-Animation (Persona siehe Feld „Persona" unten; leer = Eintrag übernehmen).',
   workStatusEnabled: 'Arbeitsstatus-Kopplung',
   workStatusEnabledHint:
     'Wenn aktiv, folgt dieses Pet dem DSH-Arbeitsstatus: Denken / Arbeiten / Warten auf Bestätigung / Fertig / Fehler wechseln automatisch die passende Animation und zeigen eine Blase (Animationspool in der Top-Level-Konfiguration; nur Zuhören, keine Modellaufrufe).',
@@ -140,15 +121,6 @@ export const de: Record<Key, string> = {
   clickSoundToggle: 'Klick-Sound',
   clickSoundToggleHint:
     'Beim Klick auf ein Pet ertönt der integrierte Klick-Sound (assets/sound/click-duck.wav, Lautstärke 0.5); Klicks innerhalb von 100 ms werden nur einmal abgespielt, auch bei mehreren Pets überlagert sich nichts. Aus = völlig stumm. Wird beim „Speichern" in die Benutzerkonfiguration geschrieben.',
-  whisperImageToggle: 'Flüstern-Bilder',
-  whisperImageToggleHint:
-    'Hängt an jede Flüstern-Zeile ein zufälliges Meme aus dem Pool (Bildzuordnung im Top-Level-Feld `memes` der Konfiguration). Token: Flüstern ruft ohnehin pro Zyklus das Modell auf, das Bild fügt nur Name + Beschreibung des gezogenen Memes (ca. 100 Zeichen / ≈60 Token) an dieselbe Anfrage an – vernachlässigbar.',
-  chatImageToggle: 'Chat-Bilder',
-  chatImageToggleHint:
-    'Die KI wählt im Chat passend zum Kontext ein Meme aus dem Pool (optional; Zuordnung im Top-Level-Feld `memes`). Token: Jede Nachricht führt den gesamten Katalog mit – aktuell ca. 1,1k Zeichen (≈650 Token, etwa 11-mal so viel wie beim Flüstern) und linear mit der Bildanzahl wachsend; aus = es wird kein Zeichen angehängt.',
-  chatAnimationToggle: 'Chat-Aktionen',
-  chatAnimationToggleHint:
-    'Wenn an, enthält die Chat-Anfrage die Liste der spielbaren Animationen (alle Aktionen unter animations.categories): Hält das Modell die Zeile für eine tatsächliche Aufführung, spielt das Pet sie sofort; sonst antwortet es nur mit Text. Token: Jede Nachricht führt die ganze Liste mit; aus = es wird nichts angehängt. Globaler Standard für alle Pets (ein Pet-Pack kann ihn in seiner eigenen Konfigurationsdatei überschreiben).',
   confineToggle: 'Auf aktuellen Bildschirm begrenzen',
   confineToggleHint:
     'Mehrere Monitore: Wenn an, bleibt das Pet auf dem Bildschirm, auf dem es sich gerade befindet – ein geworfenes Pet prallt nur innerhalb des Bildschirms ab, auf dem es losgelassen wurde (Bildschirmfugen wirken als Wände, es fliegt nicht zum Nachbarmonitor), und autonomes Umherlaufen bleibt auf dem aktuellen Bildschirm (ein Schritt über die Fuge wird einfach verworfen). Aus = Überqueren der Bildschirme wie gewohnt. Nur Desktop-Modus – das Browser-Overlay bleibt ohnehin im Viewport.',
@@ -161,9 +133,6 @@ export const de: Record<Key, string> = {
   voiceEnabled: 'Sprachausgabe aktivieren',
   voiceEnabledHint:
     'Hauptschalter für die automatische Sprachausgabe. Aus = regelmäßige Flüstern-Sätze und To-do-Erinnerungen werden nicht gesprochen (die beiden Unterschalter unten wirken dann nicht). Manuelles Flüstern, Chat-Antworten und die Lautsprecher-Schaltfläche im Chat-Panel sind nicht betroffen – die haben Sie selbst ausgelöst, die sprechen direkt. Es betrifft nur das Sprechen: Blasen, Chat-Gedächtnis und Systembenachrichtigungen bleiben unberührt; eine fehlgeschlagene Synthese wird nur protokolliert und unterbricht den Chat nicht.',
-  voiceWhisperEnabled: 'Flüstern sprechen',
-  voiceWhisperEnabledHint:
-    'Spricht den regelmäßig erzeugten Flüstern-Satz (manuelles Flüstern per Rechtsklick bleibt unberührt). Unterliegt dem Hauptschalter oben: Ist er aus, wirkt dieser Schalter nicht. Standardmäßig aus – Flüstern ist Hintergrundbegleitung und sollte nicht ungefragt Geräusche machen.',
   voiceTodoEnabled: 'To-do-Erinnerungen sprechen',
   voiceTodoEnabledHint:
     'Spricht eine fällige To-do-Erinnerung (die Blase erscheint weiterhin; dieser Schalter entscheidet nur, ob gesprochen wird). Unterliegt dem Hauptschalter oben. Standardmäßig aus.',
@@ -223,33 +192,6 @@ export const de: Record<Key, string> = {
   'font.simsun': 'SimSun',
   'font.comic': 'Comic Sans MS',
   'font.system': 'Systemstandard',
-  modelTitle: 'Chat & Modelle',
-  modelHint:
-    'Welches Modell Flüstern und Chat jeweils nutzen und wie viel Verlauf jeder Chat-Aufruf mitführt. „Aktueller Konversation folgen" = das Modell, das Ihre aktuelle Konversation verwendet (Standard). Globaler Standard: gilt für alle Pets, ein Pet-Pack kann ihn in seiner Art-Datei überschreiben. Die Optionen stammen aus derselben Quelle wie die Modellauswahl von DSH und werden vom Host live geliefert.',
-  modelFollow: 'Aktueller Konversation folgen',
-  modelSearch: 'Modelle suchen…',
-  modelEmpty: 'Keine passenden Modelle.',
-  modelNoModels: 'Keine Modelle verfügbar.',
-  modelLoading: 'Modellliste wird aktualisiert…',
-  modelTriggerAria: 'Modell wählen, aktuell {model}',
-  modelUnknown: ' (aktuelle Konfiguration, nicht in der Liste)',
-  modelNone: 'Für diesen Anbieter sind keine Modelle verfügbar',
-  whisperModelLabel: 'Flüstern-Modell',
-  chatModelLabel: 'Chat-Modell',
-  modelFieldHint:
-    '„Aktueller Konversation folgen" = Modell der aktuellen Konversation; schlägt ein gewähltes Modell fehl, fällt das Plugin auf das Modell der aktuellen Konversation zurück und versucht es einmal erneut.',
-  invalidModel:
-    'Bitte Modelleinstellungen prüfen: Anbieter und Modell entweder beide wählen oder beide leer lassen (aktuelle Konversation folgen).',
-  modelCatalogFailed:
-    'Modellliste konnte nicht geladen werden (Seite neu laden für einen neuen Versuch); die aktuellen Konfigurationswerte bleiben unverändert erhalten.',
-  chatMemory: 'Chat-Verlaufsrunden',
-  chatMemoryHint:
-    'Wie viele der letzten Runden jeder Chat-Aufruf mitführt (1 Runde = 1 Frage + 1 Antwort; 0 = kein Verlauf, jede Nachricht ist neu). Das Gedächtnis selbst behält alles – dieser Wert bestimmt nur, wie viel in den Kontext kommt: mehr merkt mehr und kostet mehr Token. Globaler Standard für alle Pets (ein Pet-Pack kann ihn in seiner Art-Datei überschreiben).',
-  invalidChatMemory: 'Bitte Chat-Verlaufsrunden prüfen: Zahl ≥ 0 erforderlich.',
-  chatImageLimit: 'Max. Chat-Bilder',
-  chatImageLimitHint:
-    'Wie viele Memes beim Chat höchstens an das Modell gelistet werden („erste N" = die ersten N in der Konfiguration; was bevorzugt gesendet werden soll, nach vorne verschieben). Die ganze Liste wird an jede Nachricht angehängt, Token wachsen linear mit der Anzahl – eine lange Liste kostet nur. Mit der Grenze auf die ersten N wählt das Modell nur daraus. 0 = keine Grenze (alles senden). Integrierter Standard 10. Globaler Standard für alle Pets (ein Pet-Pack kann ihn in seiner Art-Datei überschreiben). Nur Chat-Auswahl: Flüstern führt nur das gezogene Meme mit.',
-  invalidChatImageLimit: 'Bitte das Limit für Chat-Bilder prüfen: Zahl ≥ 0 erforderlich (0 = keine Grenze).',
   notifyTest: 'Testbenachrichtigung',
   notifyTestOk: 'Testbenachrichtigung gesendet – bitte unten rechts auf dem Desktop prüfen.',
   notifyDenyUnsupported:

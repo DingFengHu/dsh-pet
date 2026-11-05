@@ -29,16 +29,10 @@ import type { Pet } from './types.ts';
 const ENTRY_FIELDS: Array<keyof Pet> = [
   'animations',
   'animationWeights',
-  'eventsRefreshSec',
   'physics',
   'confineToScreen',
   'workStatusTexts',
-  'whisperModel',
-  'chatModel',
   'memes',
-  'chatImageEnabled',
-  'chatAnimationEnabled',
-  'chatImageLimit',
 ];
 
 /** 包内文件源码（守卫用；相对 src/shared/ 解析） */
@@ -82,19 +76,6 @@ describe('flattenConfigPets —— 成品 → 渲染列表的唯一填充点', (
     const [pet] = flattenConfigPets(merged as Record<string, Record<string, unknown>>);
     assert.deepEqual(pet.physics, { throwPower: 7 });
     assert.deepEqual(pet.animations, ['a.webm']);
-  });
-
-  test('实例级人设 whisperPrompt：原样带出，不参与条目级覆盖（回落由 host 消费端做）', () => {
-    const merged = {
-      main: {
-        whisperPrompt: '条目人设',
-        pets: [{ id: 'x', whisperPrompt: '实例人设' }, { id: 'y' }],
-      },
-    };
-    const [a, b] = flattenConfigPets(merged as Record<string, Record<string, unknown>>);
-    // 条目级字段是"实例写了也以 conf 为准"，人设是反例：实例那份必须留下来（它是覆盖）
-    assert.equal(a.whisperPrompt, '实例人设');
-    assert.equal('whisperPrompt' in b, false, '没写就是没写——回落由 host 的 petPersona 做，这里不填生效值');
   });
 
   test('源码守卫：客户端只有这一处填充，host 的写接口返回成品聚合', () => {

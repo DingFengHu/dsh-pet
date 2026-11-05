@@ -51,8 +51,6 @@ const pet = {
   name: '小桌宠',
   size: 260,
   display: 'both',
-  balanceEnabled: true,
-  whisperEnabled: false,
   workStatusEnabled: true,
   fixedEnabled: false,
   position: { corner: 'bottom-left', marginX: 40, marginY: 60 },

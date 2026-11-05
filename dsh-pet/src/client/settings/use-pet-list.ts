@@ -73,8 +73,6 @@ export interface PetList {
   visiblePets: Pet[];
   /** 当前选中的宠物 id。 */
   selId: string;
-  /** 当前宠物所属条目的人设正文，作为实例人设「留空时跟随什么」的预览。 */
-  entryPrompt: string;
   /** 切到另一只宠物。 */
   select: (id: string) => void;
   /** 切到另一个种类，并选中它的第一只。 */
@@ -173,8 +171,6 @@ export function usePetList(
   };
 
   const current = pets.find((pet) => pet.id === selId);
-  // 人设回落是「跟随所属条目」：main 用 main 那份，文件宠物用各自种类那份，不能串。
-  const entryPrompt = loadedRef.current.find((item) => item.key === kind)?.entryPrompt ?? '';
   const requestRemove = (): void => {
     if (!current) return;
     const entry = current.assetRoot ?? 'main';
@@ -191,7 +187,6 @@ export function usePetList(
     kind,
     visiblePets: pets.filter((pet) => (pet.assetRoot ?? 'main') === kind),
     selId,
-    entryPrompt,
     select: setSelId,
     selectKind,
     update,

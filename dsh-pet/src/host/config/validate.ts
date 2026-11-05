@@ -50,32 +50,9 @@ function animationsValid(a: unknown): boolean {
       }
     }
   }
-  const balance = evEntries.balance;
-  if (!Array.isArray(balance) || balance.length === 0) return false;
   // baifan 可选：没写 = 该条目没有这个玩法。写了才校验形状——槽位数不对会让玩法
   // 按位置取到 undefined，表现成「点了没反应」，比不配更难解释。
-  if (anims.baifan !== undefined && !activitySlotsValid(anims.baifan)) return false;
-  // sleep 可选：pet pack 不写也合法（不同角色的睡觉素材不一样，不能强求）。
-  // 写了才校验形状——一个空套或空段会让状态机「进去了但没动画播」，比不配更难解释。
-  return anims.sleep === undefined || sleepValid(anims.sleep);
-}
-
-/** sleep 段校验：非空套数组，每套都必须有非空的 start / loop / end 字符串数组。
- *  未写由调用方放行（可选字段）；这里只处理「写了」的形态。 */
-function sleepValid(value: unknown): boolean {
-  if (!Array.isArray(value) || value.length === 0) return false;
-  for (const set of value) {
-    if (!set || typeof set !== 'object' || Array.isArray(set)) return false;
-    const entry = set as Record<string, unknown>;
-    for (const phase of ['start', 'loop', 'end']) {
-      const pool = entry[phase];
-      if (!Array.isArray(pool) || pool.length === 0) return false;
-      for (const name of pool) {
-        if (typeof name !== 'string' || name.length === 0) return false;
-      }
-    }
-  }
-  return true;
+  return anims.baifan === undefined || activitySlotsValid(anims.baifan);
 }
 
 /** baifan 段校验：恰好 {@link ACTIVITY_SLOTS} 个非空动画名。
@@ -138,16 +115,6 @@ export function fontValid(value: unknown): boolean {
   return typeof f.followPet === 'boolean';
 }
 
-/** whisperModel / chatModel 段校验：{ provider, model } 两个字符串，
- *  要么都留空（= 跟随当前对话的模型）要么都非空——只填一半会拼出「用 A 家的模型名去问 B 家」
- *  这种必然失败的组合，按非法处理（告警 + 取默认）。 */
-export function modelSelectionValid(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const m = value as Record<string, unknown>;
-  if (typeof m.provider !== 'string' || typeof m.model !== 'string') return false;
-  return (m.provider.trim() === '') === (m.model.trim() === '');
-}
-
 /** workStatusTexts 段校验：二维数组——外层每项都是非空字符串数组（档位文案，每档可多句随机）；空数组不可用 */
 function workStatusTextsValid(value: unknown): boolean {
   if (!Array.isArray(value) || value.length === 0) return false;
@@ -163,23 +130,10 @@ function workStatusTextsValid(value: unknown): boolean {
 /** 顶层标量字段的合法性（非法与缺失同处理：取默认值 + 告警） */
 export function topFieldValid(key: string, value: unknown): boolean {
   switch (key) {
-    case 'whisperPrompt':
-      return typeof value === 'string' && value.length > 0;
-    case 'chatMemoryRounds': {
-      const n = Number(value);
-      return Number.isFinite(n) && n >= 0;
-    }
-    case 'chatImageLimit': {
-      // 对话配图张数上限：非负数字（0 = 不限制）；小数按消费者 Math.floor 取整
-      const n = Number(value);
-      return Number.isFinite(n) && n >= 0;
-    }
     case 'notificationsEnabled':
       return typeof value === 'boolean';
     case 'clickSoundEnabled':
       // 点击音效开关（全局布尔，只读 main 条目）：与 notificationsEnabled 同一套校验
-      return typeof value === 'boolean';
-    case 'whisperImageEnabled':
       return typeof value === 'boolean';
     case 'voiceEnabled':
       // 语音播报开关（全局布尔）：只决定念不念，不影响气泡与记忆
@@ -190,15 +144,8 @@ export function topFieldValid(key: string, value: unknown): boolean {
     case 'voiceVolume':
       // 播放音量系数：0–1 的有限数，与 Audio.volume 同量纲；越界即非法（不夹取，读取侧回落默认）
       return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
-    case 'voiceWhisperEnabled':
-      // 周期碎碎念的语音开关（全局布尔）：只决定念不念，不影响气泡与记忆
-      return typeof value === 'boolean';
     case 'voiceTodoEnabled':
       // 待办提醒的语音开关（全局布尔）：同上
-      return typeof value === 'boolean';
-    case 'chatImageEnabled':
-      return typeof value === 'boolean';
-    case 'chatAnimationEnabled':
       return typeof value === 'boolean';
     case 'confineToScreen':
       return typeof value === 'boolean';
@@ -209,38 +156,13 @@ export function topFieldValid(key: string, value: unknown): boolean {
       return animationsValid(value);
     case 'animationWeights':
       return weightsValid(value);
-    case 'eventsRefreshSec':
-      return eventsRefreshSecValid(value);
     case 'physics':
       return physicsValid(value);
     case 'font':
       return fontValid(value);
-    case 'whisperModel':
-    case 'chatModel':
-      return modelSelectionValid(value);
     case 'workStatusTexts':
       return workStatusTextsValid(value);
-    case 'sleepRefuseTexts':
-    case 'sleepStartTexts':
-    case 'sleepEndTexts': {
-      // 睡觉三组台词（条目级）：非空字符串数组，随机挑一句；空数组/空串会让「说话」变成静默失败
-      if (!Array.isArray(value) || value.length === 0) return false;
-      return value.every((text) => typeof text === 'string' && text.length > 0);
-    }
     default:
       return true;
   }
-}
-
-/**
- * eventsRefreshSec 段校验：事件名 → 间隔秒（正的有限数字）。
- * 这是整段替换字段：缺的键由消费端各自兜底（1800 / 300），多写的键原样保留；空对象合法。
- */
-function eventsRefreshSecValid(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  for (const v of Object.values(value as Record<string, unknown>)) {
-    const n = Number(v);
-    if (!Number.isFinite(n) || n <= 0) return false;
-  }
-  return true;
 }

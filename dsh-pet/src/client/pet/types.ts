@@ -11,7 +11,6 @@ import type { jsx } from 'react/jsx-runtime';
 export type RuntimePet = Pet & {
   animations: Animations;
   animationWeights: Weights;
-  eventsRefreshSec: Record<string, number>;
   physics: PhysicsParams;
 };
 

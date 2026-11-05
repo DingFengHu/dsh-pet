@@ -34,21 +34,11 @@ export const fr: Record<Key, string> = {
   'shortcut.capture': 'Capture d’écran vers le chat',
   shortcutCardTitle: 'Raccourcis',
   shortcutCardHint: 'Deux groupes une fois déployé : raccourcis du compagnon et raccourcis globaux.',
-  shortcutRowChat: 'Ouvrir le chat',
-  shortcutRowHold: 'Maintenir pour parler',
-  shortcutRowHear: 'Saisie vocale',
-  shortcutRowCapture: 'Capture d’écran',
-  shortcutRowPaste: 'Coller une image',
   shortcutRowTodo: 'Tâches',
-  shortcutRowSleep: 'Dormir / réveiller',
   shortcutRowDisplay: 'Position d’affichage',
-  shortcutRowSidebar: 'Ouvrir le chat latéral',
   shortcutGroupPet: 'Raccourcis du compagnon',
   shortcutGroupPetHint:
     'Sur le web, il suffit de survoler le compagnon. Dans la fenêtre du bureau, cliquez d’abord sur le compagnon pour qu’il prenne le focus clavier.',
-  shortcutGroupGlobal: 'Raccourcis globaux',
-  shortcutGroupGlobalHint:
-    'Distribués par DSH dans le web et la fenêtre du bureau ; modifiables dans Réglages → Général → Raccourcis.',
   petsLabel: 'Compagnons',
   add: 'Ajouter un compagnon',
   remove: 'Supprimer',
@@ -66,15 +56,6 @@ export const fr: Record<Key, string> = {
   nameLabel: 'Nom',
   nameHint:
     "Affiché au survol du compagnon et ajouté aux personas de l'IA (« votre nom est X »). Les doublons sont permis ; laissé vide, l'identifiant du compagnon est utilisé.",
-  personaLabel: 'Persona (facultatif)',
-  personaHint:
-    "Ne concerne que ce compagnon. Laissez vide pour suivre le persona de l'entrée — le texte grisé dans le champ est exactement celui-ci. Le system réellement envoyé au modèle = ce texte + la ligne « votre nom est <nom> » ajoutée automatiquement + le contexte temporel courant ; ne répétez donc ni le nom ni la date ici.",
-  personaCount: '{n} caractères',
-  balanceEnabled: 'Fonction solde',
-  balanceEnabledHint: "Une fois activée, ce compagnon joue l'animation de solde et affiche la bulle de solde.",
-  whisperEnabled: 'Murmures',
-  whisperEnabledHint:
-    "Une fois activé, ce compagnon génère périodiquement une phrase via l'IA et joue l'animation de murmure (persona = le champ ci-dessous ; vide = celui de l'entrée).",
   workStatusEnabled: "Suivi de l'état de travail",
   workStatusEnabledHint:
     "Une fois activé, ce compagnon suit l'état de travail de DSH : réflexion / travail / attente de confirmation / terminé / erreur déclenchent l'animation correspondante et une bulle (le pool se trouve au niveau supérieur de la configuration ; écoute seule, aucun appel au modèle).",
@@ -141,15 +122,6 @@ export const fr: Record<Key, string> = {
   clickSoundToggle: 'Son au clic',
   clickSoundToggleHint:
     "Joue le son intégré (assets/sound/click-duck.wav, volume 0,5) quand on clique sur un compagnon ; les clics répétés en moins de 100 ms ne sonnent qu'une fois, donc plusieurs compagnons ne se superposent jamais. Désactivez-le pour un silence total. Écrit dans la configuration utilisateur avec « Enregistrer ».",
-  whisperImageToggle: 'Images des murmures',
-  whisperImageToggleHint:
-    "Joindre un mème tiré au hasard dans le pool à chaque murmure (la correspondance des images se trouve dans le champ memes, au niveau supérieur de la configuration). Tokens : un murmure appelle déjà le modèle à chaque cycle ; l'image ajoute seulement le nom + la description de ce mème (environ 100 caractères / ~60 tokens) à la même requête — négligeable.",
-  chatImageToggle: 'Images de discussion',
-  chatImageToggleHint:
-    "L'IA choisit un mème du pool adapté au contexte (facultatif ; la correspondance se trouve dans le champ memes, au niveau supérieur de la configuration). Tokens : chaque message transporte tout le catalogue — actuellement environ 1,1 k caractères (~650 tokens, soit environ 11 fois le cas des murmures) et cela croît avec le nombre d'images ; désactivé, rien du tout n'est ajouté.",
-  chatAnimationToggle: 'Actions en discussion',
-  chatAnimationToggleHint:
-    "Une fois activé, la requête de discussion transporte la liste des animations jouables (toutes les actions de animations.categories) : si le modèle estime que la réplique joue réellement l'une d'elles, le compagnon la joue immédiatement ; sinon il répond seulement en texte. Tokens : chaque message transporte toute la liste ; désactivé, rien n'est ajouté. Valeur par défaut globale pour tous les compagnons (un pet pack peut la surcharger dans son propre fichier de configuration).",
   confineToggle: "Limiter à l'écran actuel",
   confineToggleHint:
     "Multi-écrans : une fois activé, le compagnon reste sur l'écran où il se trouve — un compagnon lancé ne rebondit que sur l'écran du relâchement (les jointures d'écrans font office de murs, il ne passe pas sur l'écran voisin) et l'errance autonome ne se fait que sur l'écran actuel (tout pas qui franchirait la jointure est annulé). Désactivé, il traverse les écrans comme d'habitude. Mode bureau uniquement — l'overlay du navigateur reste de toute façon dans la zone visible.",
@@ -162,9 +134,6 @@ export const fr: Record<Key, string> = {
   voiceEnabled: 'Lecture vocale',
   voiceEnabledHint:
     "Interrupteur principal de la lecture automatique. Désactivé, les murmures périodiques et les rappels de tâches restent muets (les deux sous-interrupteurs ci-dessous n'ont alors aucun effet). Les murmures manuels, les réponses de discussion et le bouton haut-parleur du panneau de discussion ne sont pas concernés — vous les avez demandés, la surface qui les déclenche les lit directement. Cela ne décide que du son émis : bulles, mémoire de discussion et notifications système restent intactes ; un échec de synthèse est seulement journalisé et n'interrompt jamais la conversation.",
-  voiceWhisperEnabled: 'Lire les murmures',
-  voiceWhisperEnabledHint:
-    "Lit le murmure généré périodiquement (un murmure manuel par clic droit n'est pas concerné). Soumis à l'interrupteur principal ci-dessus. Désactivé par défaut — les murmures sont une narration de fond et ne doivent pas faire de bruit sans qu'on le demande.",
   voiceTodoEnabled: 'Lire les rappels de tâches',
   voiceTodoEnabledHint:
     "Lit un rappel de tâche à son échéance (la bulle s'affiche toujours ; cet interrupteur décide seulement s'il est lu). Soumis à l'interrupteur principal ci-dessus. Désactivé par défaut.",
@@ -227,33 +196,6 @@ export const fr: Record<Key, string> = {
   'font.simsun': 'SimSun',
   'font.comic': 'Comic Sans MS',
   'font.system': 'Police système',
-  modelTitle: 'Discussion et modèles',
-  modelHint:
-    "Quel modèle utilisent les murmures et la discussion, et combien d'historique chaque requête transporte. « Suivre la conversation actuelle » utilise le modèle de votre conversation en cours (par défaut). Valeur globale par défaut : s'applique à tous les compagnons, et un pet pack peut la remplacer dans son propre fichier de type. Les options viennent de la même source que le sélecteur de modèles de DSH, fournies en direct par l'hôte.",
-  modelFollow: 'Suivre la conversation actuelle',
-  modelSearch: 'Rechercher un modèle…',
-  modelEmpty: 'Aucun modèle correspondant.',
-  modelNoModels: 'Aucun modèle disponible.',
-  modelLoading: 'Actualisation de la liste des modèles…',
-  modelTriggerAria: 'Choisir un modèle, actuellement {model}',
-  modelUnknown: ' (configuration actuelle, absent de la liste)',
-  modelNone: 'Aucun modèle disponible pour ce fournisseur',
-  whisperModelLabel: 'Modèle des murmures',
-  chatModelLabel: 'Modèle de discussion',
-  modelFieldHint:
-    '« Suivre la conversation actuelle » utilise le modèle de la conversation ; si un modèle choisi échoue, le plugin revient au modèle de la conversation et réessaie une fois.',
-  invalidModel:
-    'Vérifiez les réglages de modèle : choisissez à la fois un fournisseur et un modèle, ou laissez les deux vides (suivre la conversation actuelle).',
-  modelCatalogFailed:
-    'Échec du chargement de la liste des modèles (rafraîchissez la page pour réessayer) ; vos valeurs actuelles sont conservées telles quelles.',
-  chatMemory: "Tours d'historique de discussion",
-  chatMemoryHint:
-    'Nombre de tours récents transportés par chaque requête de discussion (1 tour = 1 question + 1 réponse ; 0 = aucun historique, chaque message repart de zéro). La mémoire elle-même conserve tout — cette valeur décide seulement de ce qui entre dans le contexte : plus elle est élevée, plus le compagnon se souvient, et plus cela coûte de tokens. Valeur globale par défaut, partagée par tous les compagnons (un pet pack peut la remplacer dans son propre fichier de type).',
-  invalidChatMemory: "Vérifiez les tours d'historique : il faut un nombre ≥ 0.",
-  chatImageLimit: "Limite d'images de discussion",
-  chatImageLimitHint:
-    'Nombre maximal de mèmes proposés au modèle pendant la discussion (« N premiers » = les N premières entrées de la configuration ; déplacez en tête celles que vous voulez voir partir en priorité). Toute la liste est jointe à chaque message et les tokens croissent linéairement avec le nombre, donc une longue liste coûte cher ; la limiter aux N premières restreint le choix du modèle à celles-là. 0 = aucune limite (tout envoyer). Valeur intégrée par défaut : 10. Valeur globale par défaut, partagée par tous les compagnons (un pet pack peut la remplacer dans son propre fichier de type). Discussion uniquement — un murmure ne porte que le mème tiré.',
-  invalidChatImageLimit: "Vérifiez la limite d'images de discussion : il faut un nombre ≥ 0 (0 = aucune limite).",
   notifyTest: 'Tester la notification',
   notifyTestOk: 'Notification de test envoyée — regardez en bas à droite de votre bureau.',
   notifyDenyUnsupported:

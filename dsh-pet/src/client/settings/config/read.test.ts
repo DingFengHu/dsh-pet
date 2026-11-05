@@ -64,10 +64,6 @@ describe('readMainConfig —— 成品聚合 → 表单补丁', () => {
     const bad = readMainConfig({ main: { pets: [], voiceTodoEnabled: 'yes' } });
     assert.equal('voiceTodoEnabled' in (bad ?? {}), false, '非布尔当作没写');
   });
-
-  test('条目人设原样带出，供「留空时跟随什么」的预览', () => {
-    assert.equal(readMainConfig({ main: { pets: [], whisperPrompt: '条目人设' } })?.entryPrompt, '条目人设');
-  });
 });
 
 describe('readConfigEntries —— 成品聚合 → 条目实例列表', () => {
@@ -108,14 +104,5 @@ describe('readConfigEntries —— 成品聚合 → 条目实例列表', () => {
     assert.equal(readConfigEntries({}), null);
     assert.equal(readConfigEntries({ main: {} }), null);
     assert.equal(readConfigEntries({ main: { pets: 'oops' } }), null);
-  });
-
-  test('条目人设各自带出：pack 跟随自己种类那份，不共用 main 的', () => {
-    const entries = readConfigEntries({
-      main: { pets: [], whisperPrompt: '主宠物人设' },
-      glm: { pets: [], whisperPrompt: 'GLM 人设' },
-    });
-    assert.equal(entries?.[0].entryPrompt, '主宠物人设');
-    assert.equal(entries?.[1].entryPrompt, 'GLM 人设');
   });
 });

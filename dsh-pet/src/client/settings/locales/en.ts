@@ -33,21 +33,11 @@ export const en: Record<Key, string> = {
   'shortcut.capture': 'Screenshot to chat',
   shortcutCardTitle: 'Shortcuts',
   shortcutCardHint: 'Two groups once expanded: pet shortcuts and global shortcuts.',
-  shortcutRowChat: 'Open chat',
-  shortcutRowHold: 'Hold to talk',
-  shortcutRowHear: 'Voice input',
-  shortcutRowCapture: 'Screenshot',
-  shortcutRowPaste: 'Paste image',
   shortcutRowTodo: 'Todo list',
-  shortcutRowSleep: 'Sleep / wake',
   shortcutRowDisplay: 'Display position',
-  shortcutRowSidebar: 'Open sidebar chat',
   shortcutGroupPet: 'Pet shortcuts',
   shortcutGroupPetHint:
     'On the web, hovering the pet is enough. In the desktop pet window, click the pet first so it takes keyboard focus.',
-  shortcutGroupGlobal: 'Global shortcuts',
-  shortcutGroupGlobalHint:
-    'Dispatched by DSH in the web app and the desktop window; rebind them in Settings → General → Shortcuts.',
   petsLabel: 'Pets',
   add: 'Add pet',
   remove: 'Remove',
@@ -65,15 +55,6 @@ export const en: Record<Key, string> = {
   nameLabel: 'Name',
   nameHint:
     'Shown on hover and added to AI personas ("your name is X"). Duplicates allowed; empty falls back to the pet id.',
-  personaLabel: 'Persona (optional)',
-  personaHint:
-    'Applies to this pet only. Leave empty to follow the entry persona — the grey text inside the box is exactly that. The system prompt actually sent = this text + an appended 「your name is "<name>"」 line + the current time context, so do not repeat the name or the date here.',
-  personaCount: '{n} chars',
-  balanceEnabled: 'Balance',
-  balanceEnabledHint: 'When enabled, this pet plays balance animations and shows the balance bubble.',
-  whisperEnabled: 'Whisper',
-  whisperEnabledHint:
-    'When enabled, this pet periodically generates a line via AI and plays the whisper animation (persona = the field below; empty follows the entry).',
   workStatusEnabled: 'Work status',
   workStatusEnabledHint:
     'When enabled, this pet follows DSH work state: thinking / working / waiting / done / error switch animations and show bubbles (pool in top-level config; listening only, no model calls).',
@@ -139,15 +120,6 @@ export const en: Record<Key, string> = {
   clickSoundToggle: 'Click sound',
   clickSoundToggleHint:
     'Plays the built-in click sound (assets/sound/click-duck.wav, volume 0.5) when a pet is clicked; repeated clicks within 100ms play only once, so multiple pets never stack up. Turn it off for silence. Written to the user config together with Save.',
-  whisperImageToggle: 'Whisper images',
-  whisperImageToggleHint:
-    'Attach one random meme from the pool to each whisper line (image mapping lives in the top-level `memes` config field). Tokens: a whisper already calls the model every cycle, so the image only appends the name + description of that one meme (~100 chars / ~60 tokens) to the same request — negligible.',
-  chatImageToggle: 'Chat images',
-  chatImageToggleHint:
-    'Let the AI pick one meme from the pool that fits the current context (optional; mapping lives in the top-level `memes` config field). Tokens: every message carries the whole catalog — currently ~1.1k chars (~650 tokens, about 11x the whisper case) and growing with the number of images; turning this off appends nothing at all.',
-  chatAnimationToggle: 'Chat actions',
-  chatAnimationToggleHint:
-    'When on, the chat request carries the list of playable animations (every action under animations.categories): if the model judges that the line really performs one, the pet acts it out on the spot; otherwise it replies in text only. Tokens: every message carries the whole list; off appends nothing. Global default for all pets (a pet pack can override it in its own config file).',
   confineToggle: 'Lock to the current screen',
   confineToggleHint:
     'Multi-monitor: when on, the pet stays inside the screen it is currently on — a thrown pet bounces only inside the screen it was released on (screen seams act as walls, so it never flies to the neighbouring monitor), and autonomous wandering only walks within the screen it is currently on (a step that would cross the seam is simply cancelled). Turn this off to let it cross screens as usual. Desktop only — the browser overlay always stays inside the viewport anyway.',
@@ -160,9 +132,6 @@ export const en: Record<Key, string> = {
   voiceEnabled: 'Speak replies',
   voiceEnabledHint:
     'Master switch for automatic speech. When off, periodic whispers and todo reminders stay silent (the two sub-switches below have no effect). Manual whispers, chat replies and the speaker button in the chat panel are not gated — you asked for those, so the surface you asked from speaks them directly. It only affects whether sound is produced — bubbles, chat memory and system notifications are untouched; a failed synthesis is logged and never interrupts the conversation.',
-  voiceWhisperEnabled: 'Speak whispers',
-  voiceWhisperEnabledHint:
-    'Speaks the periodically generated whisper (right-clicking for a manual whisper is unaffected). Gated by the master switch above. Off by default — whispers are background narration and should not make noise unasked.',
   voiceTodoEnabled: 'Speak todo reminders',
   voiceTodoEnabledHint:
     'Speaks a todo reminder when it comes due (the bubble still appears; this only decides whether it is spoken). Gated by the master switch above. Off by default.',
@@ -223,33 +192,6 @@ export const en: Record<Key, string> = {
   'font.simsun': 'SimSun',
   'font.comic': 'Comic Sans MS',
   'font.system': 'System default',
-  modelTitle: 'Chat & models',
-  modelHint:
-    'Which model each of whisper and chat uses, and how much history every chat request carries. "Follow current conversation" uses the model your current conversation is on (default). Global default: applies to every pet, and a pet pack may override it in its own kind file. The options come from the same source as the DSH model picker, served live by the host.',
-  modelFollow: 'Follow current conversation',
-  modelSearch: 'Search models…',
-  modelEmpty: 'No matching models.',
-  modelNoModels: 'No models available.',
-  modelLoading: 'Refreshing model list…',
-  modelTriggerAria: 'Select model, current {model}',
-  modelUnknown: ' (current config, not in the list)',
-  modelNone: 'No models available for this provider',
-  whisperModelLabel: 'Whisper model',
-  chatModelLabel: 'Chat model',
-  modelFieldHint:
-    '"Follow current conversation" uses the conversation model; if a chosen model fails, the plugin falls back to the conversation model and retries once.',
-  invalidModel:
-    'Check the model settings: pick both a provider and a model, or leave both empty (follow the current conversation).',
-  modelCatalogFailed:
-    'Failed to load the model list (refresh the page to retry); your current values are kept as they are.',
-  chatMemory: 'Chat history rounds',
-  chatMemoryHint:
-    'How many recent rounds each chat request carries (1 round = 1 question + 1 answer; 0 = no history, every message starts fresh). The memory itself keeps everything — this only decides how much goes into the context: higher remembers more and costs more tokens. Global default, shared by every pet (a pet pack may override it in its own kind file).',
-  invalidChatMemory: 'Check the chat history rounds: it must be a number ≥ 0.',
-  chatImageLimit: 'Chat image limit',
-  chatImageLimitHint:
-    'How many memes at most are listed to the model during chat ("first N" = the first N you wrote in the config, so move the ones you want sent to the front). That whole list is attached to every message and tokens grow linearly with the count, so a long list is pure burn; capping it to the first N makes the model pick only among those. 0 = no limit (send everything). Built-in default 10. Global default, shared by every pet (a pet pack may override it in its own kind file). Chat only — a whisper carries just the one meme it drew.',
-  invalidChatImageLimit: 'Check the chat image limit: it must be a number ≥ 0 (0 = no limit).',
   notifyTest: 'Test notification',
   notifyTestOk: 'Test notification sent — check the bottom-right of your desktop.',
   notifyDenyUnsupported: 'System notifications are not supported in this environment (no Notification API).',

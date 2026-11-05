@@ -45,15 +45,6 @@ export type EventSlot = string | string[];
 /** 事件动画：事件名 → 档位槽位数组（数组顺序即档位顺序；不进随机链，只由代码显式触发）。 */
 export type Events = Record<string, EventSlot[]>;
 
-/** 一套睡觉动作：入睡 → 循环 → 醒来。
- *  三段各是候选数组（进入该段时随机抽一个）；整套由 animations.sleep 的外层数组随机挑选，
- *  三段必须来自同一套，否则会出现「蹲着入睡、趴着醒来」。 */
-export interface SleepSet {
-  start: string[];
-  loop: string[];
-  end: string[];
-}
-
 /** 动画权重。 */
 export interface Weights {
   idle: number;
@@ -70,9 +61,6 @@ export interface Animations {
   moves: MovesConfig;
   categories: Category[];
   events: Events;
-  /** 睡觉动作套（可选）：没写 = 该条目没有睡觉功能，右键菜单不出现「睡觉」。
-   *  写了就「整套随机 → 段内随机」取，结构见 {@link SleepSet}。 */
-  sleep?: SleepSet[];
   /** 内置玩法「吃白饭」的动画（可选）：键名即玩法 id，值是**恰好 5 个**动画名，
    *  按位置对应：跑向屏幕底部、追饭时的侧身跑、到位后等开饭、吃到碗饭、吃饭团。
    *  不写 = 该条目没有这个玩法；槽位数与顺序是玩法契约（代码按索引取），名字只是素材文件名。 */
@@ -94,12 +82,6 @@ export interface Pet {
    *  100 ≈ 不限制（宽窗口下与按 px 显示一致）；填 150 人物会宽于屏幕，但画框仍被 `size` 夹住。
    *  小于 1 或非数字回落到 20。只作用于浏览器半侧——桌面透明窗始终用 `size`。 */
   sizePercent?: number;
-  /** 是否启用余额功能：true = 触发余额动画并显示余额气泡，false = 该宠物完全禁用余额。缺失即配置错误 */
-  balanceEnabled: boolean;
-  /** 是否启用碎碎念：true = 按 eventsRefreshSec.whisper 周期生成一句话并播碎碎念动画，false = 禁用。
-   *  缺失默认 true；碎碎念每次生成都会调用当前对话的模型，本地 LLM 单并发时会顶掉正在跑的任务的 KV cache，
-   *  不需要的宠物请显式写 false。display 为 none 的宠物整体跳过：不生成、不调模型。 */
-  whisperEnabled: boolean;
   /** 是否启用工作状态联动：true = 监听 DSH 会话事件，按 animations.events.workStatus 切档位动画与气泡。
    *  缺失默认 true。监听不调用模型，无 KV cache 风险。 */
   workStatusEnabled: boolean;
@@ -109,55 +91,22 @@ export interface Pet {
   /** 显示位置（必填）：缺失即配置错误，代码不做兜底 */
   display: PetDisplay;
   position: { corner: Corner; marginX: number; marginY: number };
-  /** 实例级人设（pets[].whisperPrompt）：碎碎念与对话共用的系统提示词正文。
-   *  写了就取代所属条目顶层那一份（替换而非拼接），没写或空串则回落条目——回落发生在宿主半侧，不是错误。
-   *  只写正文：名字与时间背景由宿主无条件追加，不要在这里重复写。 */
-  whisperPrompt?: string;
   animations?: Animations;
   animationWeights?: Weights;
   extra?: boolean;
   assetRoot?: string;
-  /** 全局默认：事件刷新周期（秒，事件名 → 间隔；整段替换，缺的键由消费端各自兜底）。
-   *  .whisper 按所属条目读（种类可覆盖），.balance 只读 main 条目。 */
-  eventsRefreshSec?: Record<string, number>;
   /** 全局默认：拖拽抛掷物理参数（用户写一次即对所有宠物生效，含 pet pack；种类文件顶层写了则用自己那份） */
   physics?: PhysicsParams;
   /** 全局默认：是否锁定在当前屏幕——抛掷与自主漫游都只在当前所在那块屏内活动 */
   confineToScreen?: boolean;
-  /** 条目级：睡觉期间被手动打扰时弹的拒绝台词（非空字符串数组，随机挑一句）。 */
-  sleepRefuseTexts?: string[];
-  /** 条目级：入睡时弹的台词（播「开始」时随机挑一句）。 */
-  sleepStartTexts?: string[];
-  /** 条目级：醒来时弹的台词（播「起来」时随机挑一句）。 */
-  sleepEndTexts?: string[];
   /** 条目级：工作状态气泡文案（外层索引 = 档位 0..5，内层每档可多句随机抽）。
    *  整字段缺失 = 不弹工作状态文本，只播动画。 */
   workStatusTexts?: string[][];
-  /** 全局默认：碎碎念单独指定的服务商 + 模型；provider 与 model 都为空 = 跟随当前对话的模型 */
-  whisperModel?: ModelSelection;
-  /** 全局默认：对话单独指定的服务商 + 模型，都为空 = 跟随当前对话的模型 */
-  chatModel?: ModelSelection;
   /** 全局默认：字体（种类 / 字号 / 是否随宠物大小缩放） */
   font?: FontConfig;
   /** 条目级：表情包清单（名称 → 给模型看的描述），合并器吹进每只实例、多实例共享。
-   *  顺序即配置书写顺序，也就是 chatImageLimit 截取「前 N 张」的依据。 */
+   *  顺序即配置书写顺序。 */
   memes?: Record<string, string>;
-  /** 条目级：对话配图开关。true = 对话生成时把表情包清单交给模型按语境选一张；缺省按关处理。 */
-  chatImageEnabled?: boolean;
-  /** 条目级：对话动作联动开关。true = 对话时把 categories 下的动作清单交给模型，
-   *  由模型在语境贴合时挑一个当场表演；缺省按关处理。 */
-  chatAnimationEnabled?: boolean;
-  /** 条目级：对话配图张数上限（非负整数，0 = 不限制）。只截「交给模型的清单」，不截碎碎念抽图。 */
-  chatImageLimit?: number;
-}
-
-/** 一处「服务商 + 模型」选择（config.jsonc 的 whisperModel / chatModel 段）。
- *  provider 与 model 要么都为空（= 跟随当前对话的模型），要么都非空，只填一半是配置错误。 */
-export interface ModelSelection {
-  /** 服务商路由 id（与 DSH 模型选择器同一命名空间） */
-  provider: string;
-  /** 该服务商下的模型 id */
-  model: string;
 }
 
 /** config.jsonc 的 physics 段：拖拽抛掷手感参数（全局，所有宠物共用）。
@@ -215,12 +164,6 @@ export interface ClientConfig {
    *  （含 display 为 web/none 的），勾选即可切回桌面；false = 不建。
    *  缺失默认 true。关掉后「把不在桌面的宠物叫回桌面」在桌面侧没有入口，只能走设置页或网页端右键菜单。 */
   trayEnabled: boolean;
-  /** 碎碎念配图开关：true = 每次从表情包池随机抽 1 张连同文本显示（碎碎念无上下文，故随机） */
-  whisperImageEnabled: boolean;
-  /** 对话配图开关：true = 把表情包清单交模型按语境选 1 张（可不选），false = 纯文本 */
-  chatImageEnabled: boolean;
-  /** 对话动作联动开关：true = 把 categories 下的动作清单交模型按语境挑一个当场表演，false = 纯文字 */
-  chatAnimationEnabled: boolean;
   /** 是否锁定在当前屏幕：true = 宠物只在当前所在那块屏内活动——甩出去只在该屏内弹（屏缝当墙），
    *  自主漫游也只在屏内走；false = 跨屏飞行与跨屏行走。根字段，不属于 physics——它不改手感，只改「被允许去哪」。
    *  条目级，必填，缺失即配置错误。 */
@@ -230,10 +173,4 @@ export interface ClientConfig {
   animationWeights: Weights;
   /** 拖拽抛掷物理参数（全局，所有宠物共用；合并器已填默认） */
   physics: PhysicsParams;
-  /** 碎碎念用的服务商 + 模型（条目级；两者都为空 = 跟随当前对话的模型） */
-  whisperModel: ModelSelection;
-  /** 对话用的服务商 + 模型（条目级；两者都为空 = 跟随当前对话的模型） */
-  chatModel: ModelSelection;
-  /** 事件刷新周期（秒）：事件名 → 间隔；balance = 余额数据刷新与动画触发间隔 */
-  eventsRefreshSec: Record<string, number>;
 }

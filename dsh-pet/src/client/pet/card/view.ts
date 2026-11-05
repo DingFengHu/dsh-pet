@@ -94,7 +94,7 @@ export function makeCardView(rt: { h: typeof jsx }) {
         props.rootStyle,
       ),
       children: [
-        // 气泡单槽；余额不可用说明也走这里，手动请求与命令气泡不受 whisperEnabled 限制。
+        // 气泡单槽：说话气泡与命令气泡共用。
         props.bubble,
         h('div', {
           ref: props.stageRef,

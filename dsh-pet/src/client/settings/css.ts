@@ -104,7 +104,6 @@ const SETTINGS_CSS = [
   '.dsh-pet-cfg__inp:disabled{color:var(--dsw-alias-label-tertiary);cursor:default}',
 
   // 人设复用 __inp 的边框与字号，只补高度与纵向缩放；人设没有长度上限，右下角只显示字数、不阻断输入。
-  '.dsh-pet-cfg__persona{display:flex;flex-direction:column;gap:2px;min-width:0}',
   '.dsh-pet-cfg__area{min-height:66px;resize:vertical;line-height:18px}',
   '.dsh-pet-cfg__count{font-size:11px;color:var(--dsw-alias-label-tertiary);text-align:right}',
 

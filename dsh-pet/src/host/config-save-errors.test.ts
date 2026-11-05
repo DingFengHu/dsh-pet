@@ -12,7 +12,6 @@ const pet = {
   id: 'main',
   name: 'Blue',
   size: 240,
-  balanceEnabled: false,
   display: 'web',
   position: { corner: 'top-right', marginX: 20, marginY: 20 },
 };

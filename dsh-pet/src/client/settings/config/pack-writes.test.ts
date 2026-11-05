@@ -18,8 +18,6 @@ const pet = (id: string, over: Partial<Pet> = {}): Pet => ({
   id,
   name: id,
   size: 300,
-  balanceEnabled: false,
-  whisperEnabled: false,
   workStatusEnabled: false,
   fixedEnabled: false,
   display: 'web',

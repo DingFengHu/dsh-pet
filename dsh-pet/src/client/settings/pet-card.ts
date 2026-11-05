@@ -1,14 +1,14 @@
 /**
- * 选中宠物的配置卡：头像、名字 / 大小 / 显示位置、角落与偏移、四个功能开关、实例级人设。
+ * 选中宠物的配置卡：头像、名字 / 大小 / 显示位置、角落与偏移、功能开关。
  * 只编辑 main 条目的实例字段：条目级字段由成品配置回落，卡里不出现也不回写；文件宠物永不进这张卡。
  * 纯展示 + 回调，状态全在设置页外壳；`onChange` 的补丁形状即提交形状的预览。
  * 头像格与两组字段在 ./pet-card-parts，本文件只做编排。
  * @module dsh-pet/src/client/settings/pet-card
  */
-import type { ChangeEvent, FunctionComponent } from 'react';
+import type { FunctionComponent } from 'react';
 import type { Pet } from '../../shared/types.ts';
 import type { SettingsRuntime } from './runtime.ts';
-import { INPUT_CLASS, makeUiKit } from './ui.ts';
+import { makeUiKit } from './ui.ts';
 import { makePetAvatarCell, makePetIdentityFields, makePetPositionFields, type PetPatch } from './pet-card-parts.ts';
 
 /** 宠物卡的全部输入。 */
@@ -19,8 +19,6 @@ export interface PetCardProps {
   busy: boolean;
   /** 保存 / 同步的最近一次反馈，就近显示在卡片右上角。 */
   msg: { kind: 'ok' | 'err' | ''; text: string };
-  /** 条目级人设正文，作为实例人设输入框的 placeholder。 */
-  entryPrompt: string;
   /** 头像预览地址（已带破缓存版本号）；没上传过时宿主回的就是默认 logo。 */
   avatarSrc: string;
   /** 头像正在上传：遮罩常显且文件框禁用。 */
@@ -43,7 +41,7 @@ export interface PetCardProps {
  */
 export function makePetCard(rt: SettingsRuntime): FunctionComponent<PetCardProps> {
   const { h, t } = rt;
-  const { tip, q, field, toggleCell } = makeUiKit({ h, t });
+  const { tip, q, toggleCell } = makeUiKit({ h, t });
   // 部件工厂在装配时各调一次：组件类型跨渲染稳定，卡片重渲染不会重建它们。
   const AvatarCell = makePetAvatarCell(rt);
   const IdentityFields = makePetIdentityFields(rt);
@@ -115,8 +113,6 @@ export function makePetCard(rt: SettingsRuntime): FunctionComponent<PetCardProps
         h('div', {
           className: 'dsh-pet-cfg__grid4',
           children: [
-            toggleCell('balanceEnabled', !!pet.balanceEnabled, busy, (v) => props.onChange({ balanceEnabled: v })),
-            toggleCell('whisperEnabled', !!pet.whisperEnabled, busy, (v) => props.onChange({ whisperEnabled: v })),
             toggleCell('workStatusEnabled', !!pet.workStatusEnabled, busy, (v) =>
               props.onChange({ workStatusEnabled: v }),
             ),
@@ -124,30 +120,6 @@ export function makePetCard(rt: SettingsRuntime): FunctionComponent<PetCardProps
           ],
         }),
 
-        // 人设（可选，实例级）：写在这只宠物上的 whisperPrompt，空 = 跟随所属条目的人设。
-        // 只存储与回显，不在这里拼 system；拼装（名字声明 + 时间背景）在宿主半侧。
-        // 占位符直接用条目人设正文，让「跟随的是什么」可见；人设没有长度上限，右下角只显示字数。
-        field(
-          t('personaLabel'),
-          h('div', {
-            className: 'dsh-pet-cfg__persona',
-            children: [
-              h('textarea', {
-                className: INPUT_CLASS + ' dsh-pet-cfg__area',
-                rows: 3,
-                value: String(pet.whisperPrompt ?? ''),
-                disabled: busy,
-                placeholder: props.entryPrompt,
-                onChange: (e: ChangeEvent<HTMLTextAreaElement>) => props.onChange({ whisperPrompt: e.target.value }),
-              }),
-              h('span', {
-                className: 'dsh-pet-cfg__count',
-                children: t('personaCount').replace('{n}', String(String(pet.whisperPrompt ?? '').length)),
-              }),
-            ],
-          }),
-          t('personaHint'),
-        ),
       ],
     });
   };

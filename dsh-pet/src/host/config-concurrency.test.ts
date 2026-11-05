@@ -17,7 +17,6 @@ const pet = (id: string) => ({
   name: id,
   size: 240,
   display: 'web',
-  balanceEnabled: false,
   whisperEnabled: false,
   workStatusEnabled: false,
   position: { corner: 'top-right', marginX: 20, marginY: 20 },

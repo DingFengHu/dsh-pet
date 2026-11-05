@@ -16,8 +16,6 @@ export type MergedConfig = Record<string, Record<string, unknown>>;
 export interface MainConfigPatch {
   /** main 条目的宠物列表（已深拷贝位置，可直接进编辑列表）。 */
   pets?: Pet[];
-  /** 条目级人设正文，作为实例人设「留空时跟随什么」的预览。 */
-  entryPrompt?: string;
   notificationsEnabled?: boolean;
   clickSoundEnabled?: boolean;
   confineToScreen?: boolean;
@@ -58,7 +56,6 @@ export function readMainConfig(merged: MergedConfig): MainConfigPatch | null {
     // 位置深拷贝：编辑列表与容器手里的成品列表必须是两份数据。
     pets: pets.map((pet) => ({ ...pet, position: { ...pet.position } })),
   };
-  if (typeof main.whisperPrompt === 'string') patch.entryPrompt = main.whisperPrompt;
   if (typeof main.notificationsEnabled === 'boolean') patch.notificationsEnabled = main.notificationsEnabled;
   if (typeof main.clickSoundEnabled === 'boolean') patch.clickSoundEnabled = main.clickSoundEnabled;
   if (typeof main.confineToScreen === 'boolean') patch.confineToScreen = main.confineToScreen;
@@ -86,8 +83,6 @@ export interface ConfigEntry {
   readonly key: string;
   /** `main` 由设置页连同全局字段整包写；`pack` 单独写回自己的配置文件。 */
   readonly kind: 'main' | 'pack';
-  /** 条目级人设正文：实例人设留空时跟随的就是它（pack 各自一份，不共用 main 的）。 */
-  readonly entryPrompt?: string;
   /** 该条目的实例；位置已深拷贝，`assetRoot` 即条目名。 */
   readonly pets: Pet[];
 }
@@ -110,7 +105,6 @@ export function readConfigEntries(merged: MergedConfig): ConfigEntry[] | null {
     out.push({
       key,
       kind: key === 'main' ? 'main' : 'pack',
-      ...(typeof conf?.whisperPrompt === 'string' ? { entryPrompt: conf.whisperPrompt } : {}),
       pets: pets.map((pet) => ({ ...pet, position: { ...pet.position }, assetRoot: key })),
     });
   }

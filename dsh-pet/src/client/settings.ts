@@ -96,7 +96,6 @@ export function makePetConfigSection(rt: SettingsRuntime): FunctionComponent<{ c
       kind,
       visiblePets,
       selId,
-      entryPrompt,
       select,
       selectKind,
       update,
@@ -321,7 +320,6 @@ export function makePetConfigSection(rt: SettingsRuntime): FunctionComponent<{ c
           pet: cur,
           busy,
           msg,
-          entryPrompt,
           // 预览与聊天面板同一个地址：内置回默认 logo，所以无需区分「有没有头像」。
           avatarSrc: avatarUrl(cur?.assetRoot ?? '', avatarVersion),
           avatarBusy,

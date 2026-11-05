@@ -18,8 +18,6 @@ const template = {
   id: 'pet-1',
   name: '小桌宠',
   size: 260,
-  balanceEnabled: true,
-  whisperEnabled: false,
   workStatusEnabled: true,
   fixedEnabled: false,
   display: 'front',
@@ -66,7 +64,6 @@ describe('draftPet —— 新宠物草稿', () => {
   test('拷贝模板的实例字段与位置，位置是深拷贝', () => {
     const draft = draftPet(template, 'pet-2');
     assert.equal(draft.size, 260);
-    assert.equal(draft.balanceEnabled, true);
     assert.equal(draft.display, 'front');
     assert.deepEqual(draft.position, { corner: 'bottom-left', marginX: 40, marginY: 60 });
 

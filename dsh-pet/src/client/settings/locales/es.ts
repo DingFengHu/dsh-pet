@@ -35,21 +35,11 @@ export const es: Record<Key, string> = {
   'shortcut.capture': 'Captura de pantalla al chat',
   shortcutCardTitle: 'Atajos',
   shortcutCardHint: 'Al expandir hay dos grupos: atajos de la mascota y atajos globales.',
-  shortcutRowChat: 'Abrir chat',
-  shortcutRowHold: 'Mantener para hablar',
-  shortcutRowHear: 'Entrada de voz',
-  shortcutRowCapture: 'Captura de pantalla',
-  shortcutRowPaste: 'Pegar imagen',
   shortcutRowTodo: 'Tareas',
-  shortcutRowSleep: 'Dormir / despertar',
   shortcutRowDisplay: 'Posición de visualización',
-  shortcutRowSidebar: 'Abrir el chat lateral',
   shortcutGroupPet: 'Atajos de la mascota',
   shortcutGroupPetHint:
     'En la web basta con pasar el puntero sobre la mascota. En la ventana del escritorio hay que hacer clic en la mascota para que reciba el foco del teclado.',
-  shortcutGroupGlobal: 'Atajos globales',
-  shortcutGroupGlobalHint:
-    'Los distribuye DSH en la web y en la ventana del escritorio; se cambian en Ajustes → General → Atajos.',
   petsLabel: 'Mascotas',
   add: 'Agregar mascota',
   remove: 'Eliminar',
@@ -67,15 +57,6 @@ export const es: Record<Key, string> = {
   nameLabel: 'Nombre',
   nameHint:
     'Se muestra al pasar el cursor y se añade a las personas de la IA ("tu nombre es X"). Se permiten duplicados; si se deja vacío, se usa el id de la mascota.',
-  personaLabel: 'Persona (opcional)',
-  personaHint:
-    'Solo afecta a esta mascota. Déjalo vacío para seguir la persona de la entrada: el texto gris del cuadro es exactamente ese contenido. El system que se envía al modelo = este texto + una línea añadida con "tu nombre es <nombre>" + el contexto de la hora actual, así que no repitas aquí el nombre ni la fecha.',
-  personaCount: '{n} caracteres',
-  balanceEnabled: 'Saldo',
-  balanceEnabledHint: 'Cuando está activado, esta mascota reproduce animaciones de saldo y muestra el globo de saldo.',
-  whisperEnabled: 'Susurros',
-  whisperEnabledHint:
-    'Cuando está activado, esta mascota genera periódicamente una frase con IA y reproduce la animación de susurro (la persona está en el campo de abajo; vacío sigue la entrada).',
   workStatusEnabled: 'Estado de trabajo',
   workStatusEnabledHint:
     'Cuando está activado, esta mascota sigue el estado de trabajo de DSH: pensando / trabajando / esperando confirmación / terminado / error cambian la animación y muestran globos (el pool está en la configuración de nivel superior; solo escucha, no llama al modelo).',
@@ -143,15 +124,6 @@ export const es: Record<Key, string> = {
   clickSoundToggle: 'Sonido al hacer clic',
   clickSoundToggleHint:
     'Reproduce el sonido de clic integrado (assets/sound/click-duck.wav, volumen 0.5) al hacer clic en una mascota; los clics repetidos en menos de 100 ms solo suenan una vez, así que varias mascotas nunca se superponen. Desactívalo para silencio total. Se escribe en la configuración del usuario al Guardar.',
-  whisperImageToggle: 'Imágenes en susurros',
-  whisperImageToggleHint:
-    'Adjunta un meme aleatorio del pool a cada susurro (el mapeo de imágenes está en el campo `memes` de la configuración de nivel superior). Tokens: un susurro ya llama al modelo en cada ciclo, así que la imagen solo añade el nombre + la descripción de ese meme (~100 caracteres / ~60 tokens) a la misma solicitud: insignificante.',
-  chatImageToggle: 'Imágenes en el chat',
-  chatImageToggleHint:
-    'Deja que la IA elija un meme del pool que encaje con el contexto actual (opcional; el mapeo está en el campo `memes` de la configuración de nivel superior). Tokens: cada mensaje lleva el catálogo completo, unos 1.1k caracteres (~650 tokens, unas 11 veces el caso de los susurros) y crece con el número de imágenes; si lo desactivas, no se adjunta ni un carácter.',
-  chatAnimationToggle: 'Acciones en el chat',
-  chatAnimationToggleHint:
-    'Cuando está activado, la petición de chat lleva la lista de animaciones que se pueden representar (todas las acciones de animations.categories): si el modelo considera que la frase realmente representa una, la mascota la ejecuta en el acto; si no, responde solo con texto. Tokens: cada mensaje lleva la lista completa; desactivado no se adjunta nada. Valor predeterminado global para todas las mascotas (un pet pack puede sobrescribirlo en su propio archivo de configuración).',
   confineToggle: 'Limitar a la pantalla actual',
   confineToggleHint:
     'Varios monitores: cuando está activado, la mascota solo se mueve dentro de la pantalla en la que está: una mascota lanzada rebota únicamente dentro de la pantalla donde se soltó (las uniones entre pantallas actúan como muros, así que nunca vuela al monitor vecino), y el vagabundeo autónomo solo camina dentro de la pantalla actual (el paso que cruzaría la unión se cancela). Desactívalo para permitir vuelos y caminatas entre pantallas. Solo afecta al modo escritorio: el overlay del navegador ya se queda dentro del viewport.',
@@ -164,9 +136,6 @@ export const es: Record<Key, string> = {
   voiceEnabled: 'Locutar respuestas',
   voiceEnabledHint:
     'Interruptor maestro de la locución automática. Si está desactivado, los susurros periódicos y los recordatorios de tareas quedan en silencio (los dos interruptores de abajo no tienen efecto). Los susurros manuales, las respuestas del chat y el botón de altavoz del panel de chat no dependen de él: los pediste tú, así que la superficie desde la que los pediste los locuta directamente. Solo afecta a si se produce sonido: los globos, la memoria del chat y las notificaciones del sistema no cambian; un fallo de síntesis se registra y nunca interrumpe la conversación.',
-  voiceWhisperEnabled: 'Locutar susurros',
-  voiceWhisperEnabledHint:
-    'Locuta el susurro generado periódicamente (el susurro manual con clic derecho no se ve afectado). Depende del interruptor maestro de arriba. Desactivado por defecto: los susurros son narración de fondo y no deberían sonar sin pedirlo.',
   voiceTodoEnabled: 'Locutar recordatorios de tareas',
   voiceTodoEnabledHint:
     'Locuta el recordatorio de una tarea cuando vence (el globo sigue apareciendo; esto solo decide si se locuta). Depende del interruptor maestro de arriba. Desactivado por defecto.',
@@ -228,33 +197,6 @@ export const es: Record<Key, string> = {
   'font.simsun': 'SimSun',
   'font.comic': 'Comic Sans MS',
   'font.system': 'Predeterminada del sistema',
-  modelTitle: 'Chat y modelos',
-  modelHint:
-    'Qué modelo usa cada uno de susurros y chat, y cuánto historial lleva cada solicitud de chat. "Seguir la conversación actual" usa el modelo de tu conversación actual (predeterminado). Valor predeterminado global: se aplica a todas las mascotas y un pet pack puede sobrescribirlo en el archivo de su propio tipo. Las opciones vienen de la misma fuente que el selector de modelos de DSH y el host las sirve en vivo.',
-  modelFollow: 'Seguir la conversación actual',
-  modelSearch: 'Buscar modelos…',
-  modelEmpty: 'No hay modelos que coincidan.',
-  modelNoModels: 'No hay modelos disponibles.',
-  modelLoading: 'Actualizando la lista de modelos…',
-  modelTriggerAria: 'Seleccionar modelo, actual {model}',
-  modelUnknown: ' (configuración actual, no está en la lista)',
-  modelNone: 'Este proveedor no tiene modelos disponibles',
-  whisperModelLabel: 'Modelo de susurros',
-  chatModelLabel: 'Modelo de chat',
-  modelFieldHint:
-    '"Seguir la conversación actual" usa el modelo de la conversación; si el modelo elegido falla, se vuelve al modelo de la conversación y se reintenta una vez.',
-  invalidModel:
-    'Revisa la configuración del modelo: elige proveedor y modelo, o deja ambos vacíos (seguir la conversación actual).',
-  modelCatalogFailed:
-    'No se pudo cargar la lista de modelos (recarga la página para reintentar); tus valores actuales se conservan tal cual.',
-  chatMemory: 'Rondas de historial del chat',
-  chatMemoryHint:
-    'Cuántas rondas recientes lleva cada solicitud de chat (1 ronda = 1 pregunta + 1 respuesta; 0 = sin historial, cada mensaje empieza de cero). La memoria en sí lo guarda todo: esto solo decide cuánto entra en el contexto; más rondas recuerdan más y gastan más tokens. Valor predeterminado global, compartido por todas las mascotas (un pet pack puede sobrescribirlo en el archivo de su propio tipo).',
-  invalidChatMemory: 'Revisa las rondas de historial del chat: debe ser un número ≥ 0.',
-  chatImageLimit: 'Límite de imágenes en el chat',
-  chatImageLimitHint:
-    'Cuántos memes como máximo se listan al modelo durante el chat ("los primeros N" = los N que escribiste primero en la configuración; mueve al frente los que quieras enviar). Esa lista completa se adjunta a cada mensaje y los tokens crecen de forma lineal con la cantidad, así que una lista larga es puro gasto; limitarla a los primeros N hace que el modelo elija solo entre esos. 0 = sin límite (enviar todo). Valor integrado predeterminado: 10. Valor predeterminado global, compartido por todas las mascotas (un pet pack puede sobrescribirlo en el archivo de su propio tipo). Solo afecta a la selección de imágenes del chat: un susurro lleva solo el meme que sacó.',
-  invalidChatImageLimit: 'Revisa el límite de imágenes del chat: debe ser un número ≥ 0 (0 = sin límite).',
   notifyTest: 'Probar notificación',
   notifyTestOk: 'Notificación de prueba enviada; mírala abajo a la derecha del escritorio.',
   notifyDenyUnsupported: 'Este entorno no admite notificaciones del sistema (no hay API Notification).',

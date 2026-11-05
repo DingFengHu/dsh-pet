@@ -24,8 +24,6 @@ export interface VoiceCardProps {
   readonly volume: number;
   /** 可选音色；为空时选择器只显示当前值（列表还没拉回来或拉取失败）。 */
   readonly voices: readonly VoiceOption[];
-  /** 周期碎碎念要不要念出来（受总开关约束）。 */
-  readonly whisperEnabled: boolean;
   /** 待办提醒要不要念出来（受总开关约束）。 */
   readonly todoEnabled: boolean;
   /** 切换播报开关。 */
@@ -34,8 +32,6 @@ export interface VoiceCardProps {
   readonly onVoiceChange: (voiceName: string) => void;
   /** 调整播放音量。 */
   readonly onVolumeChange: (volume: number) => void;
-  /** 切换周期碎碎念的播报。 */
-  readonly onWhisperToggle: (value: boolean) => void;
   /** 切换待办提醒的播报。 */
   readonly onTodoToggle: (value: boolean) => void;
 }
@@ -59,13 +55,12 @@ export function makeVoiceCard(
       className: 'dsh-pet-cfg__card',
       children: [
         cardHead(t('voiceTitle'), t('voiceHint')),
-        // 第一行三个开关：总开关与两个子项必须相邻，读得出是「同一类」；第二行两个输入：音色与音量。
+        // 第一行开关：总开关与子项必须相邻，读得出是「同一类」；第二行两个输入：音色与音量。
         // 音色不挂文字标签也不挂问号：下拉当前值「晓伊（女·活泼）」自己就说明了它是什么。
         h('div', {
           className: 'dsh-pet-cfg__grid3',
           children: [
             toggleCell('voiceEnabled', props.enabled, props.busy, props.onToggle),
-            toggleCell('voiceWhisperEnabled', props.whisperEnabled, props.busy, props.onWhisperToggle),
             toggleCell('voiceTodoEnabled', props.todoEnabled, props.busy, props.onTodoToggle),
           ],
         }),
