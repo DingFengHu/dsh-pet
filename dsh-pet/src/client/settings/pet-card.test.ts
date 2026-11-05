@@ -54,7 +54,6 @@ const pet = {
   workStatusEnabled: true,
   fixedEnabled: false,
   position: { corner: 'bottom-left', marginX: 40, marginY: 60 },
-  whisperPrompt: '你是一只猫',
 } as unknown as Pet;
 
 /** 按标签 + 值找控件，避免依赖节点顺序。 */
@@ -72,7 +71,7 @@ function picker(tree: unknown, value: string): Node {
 }
 
 const render = (onChange: (patch: PetPatch) => void, extra: Record<string, unknown> = {}) =>
-  PetCard({ pet, busy: false, msg: { kind: '', text: '' }, entryPrompt: '条目人设', onChange, ...extra } as never);
+  PetCard({ pet, busy: false, msg: { kind: '', text: '' }, onChange, ...extra } as never);
 
 describe('PetCard —— 宠物配置卡', () => {
   test('没有选中宠物：只给「暂无宠物」提示', () => {
@@ -80,7 +79,6 @@ describe('PetCard —— 宠物配置卡', () => {
       pet: null,
       busy: false,
       msg: { kind: '', text: '' },
-      entryPrompt: '',
       onChange: () => {},
       onSave: () => {},
       onRemove: () => {},
@@ -141,28 +139,15 @@ describe('PetCard —— 宠物配置卡', () => {
     ]);
   });
 
-  test('四个功能开关各自回传自己的键', () => {
+  test('两个功能开关各自回传自己的键', () => {
     const patches: PetPatch[] = [];
     const tree = render((patch) => patches.push(patch));
     const checkboxes = flatten(tree).filter((node) => node.tag === 'input' && node.props.type === 'checkbox');
-    assert.equal(checkboxes.length, 4);
+    assert.equal(checkboxes.length, 2);
     for (const box of checkboxes) {
       (box.props.onChange as (e: { target: { checked: boolean } }) => void)({ target: { checked: true } });
     }
-    assert.deepEqual(patches, [
-      { balanceEnabled: true },
-      { whisperEnabled: true },
-      { workStatusEnabled: true },
-      { fixedEnabled: true },
-    ]);
-  });
-
-  test('人设：回显当前值、占位符用条目人设、右下角显示字数', () => {
-    const tree = render(() => {});
-    const area = control(tree, 'textarea', () => true);
-    assert.equal(area.props.value, '你是一只猫');
-    assert.equal(area.props.placeholder, '条目人设');
-    assert.ok(flatten(tree).some((node) => node.props.children === 'personaCount'));
+    assert.deepEqual(patches, [{ workStatusEnabled: true }, { fixedEnabled: true }]);
   });
 
   test('忙时全部控件禁用；保存结果就近显示', () => {
@@ -170,12 +155,11 @@ describe('PetCard —— 宠物配置卡', () => {
       pet,
       busy: true,
       msg: { kind: 'err', text: '保存失败' },
-      entryPrompt: '',
       onChange: () => {},
       onSave: () => {},
       onRemove: () => {},
     } as never);
-    const controls = flatten(tree).filter((node) => node.tag === 'input' || node.tag === 'textarea');
+    const controls = flatten(tree).filter((node) => node.tag === 'input');
     assert.ok(controls.length > 0);
     for (const node of controls) assert.equal(node.props.disabled, true, `${node.tag} 应被禁用`);
     const pickers = flatten(tree).filter((node) => Array.isArray(node.props.options));

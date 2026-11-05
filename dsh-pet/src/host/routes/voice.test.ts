@@ -61,60 +61,7 @@ test('POST /voice/speak 请求体不是 JSON：400', async () => {
   if (result?.kind === 'json') assert.equal(result.status, 400);
 });
 
-test('POST /voice/hear 成功：返回识别文字', async () => {
-  const result = await handleVoiceRoutes(
-    makeDeps(async () => ({ ok: true, file: '/x.mp3' })),
-    input('voice/hear', 'POST', '{"audio":"AAAA"}'),
-  );
-  assert.equal(result?.kind, 'json');
-  if (result?.kind !== 'json') return;
-  assert.equal(result.status, 200);
-  assert.deepEqual(result.obj, { ok: true, text: '你好' });
-});
-
-test('POST /voice/hear 业务失败：200 + 失败实体（与 /chat 同一口径）', async () => {
-  const result = await handleVoiceRoutes(
-    makeDeps(
-      async () => ({ ok: true, file: '/x.mp3' }),
-      async () => ({
-        ok: false,
-        reason: 'unsupported',
-        message: 'host has no speech provider enabled',
-      }),
-    ),
-    input('voice/hear', 'POST', '{"audio":"AAAA"}'),
-  );
-  assert.equal(result?.kind, 'json');
-  if (result?.kind !== 'json') return;
-  assert.equal(result.status, 200);
-  assert.equal((result.obj as { reason: string }).reason, 'unsupported');
-});
-
-test('POST /voice/hear 请求体不是 JSON：400', async () => {
-  const result = await handleVoiceRoutes(
-    makeDeps(async () => ({ ok: true, file: '/x' })),
-    input('voice/hear', 'POST', 'nope'),
-  );
-  assert.equal(result?.kind === 'json' ? result.status : 0, 400);
-});
-
-test('POST /voice/hear 把断开信号交给识别服务', async () => {
-  let received: AbortSignal | undefined;
-  const abort = new AbortController();
-  await handleVoiceRoutes(
-    makeDeps(
-      async () => ({ ok: true, file: '/x.mp3' }),
-      async (_raw, signal) => {
-        received = signal;
-        return { ok: true, text: '好' };
-      },
-    ),
-    { ...input('voice/hear', 'POST', '{"audio":"AAAA"}'), signal: abort.signal },
-  );
-  assert.equal(received, abort.signal, '调用方断开时识别应能中止');
-});
-
-test('方法不对：三个端点都是 405', async () => {
+test('方法不对：两个端点都是 405', async () => {
   const speak = await handleVoiceRoutes(
     makeDeps(async () => ({ ok: true, file: '/x' })),
     input('voice/speak', 'GET'),
@@ -125,11 +72,6 @@ test('方法不对：三个端点都是 405', async () => {
     input('voice/voices', 'POST'),
   );
   assert.equal(voices?.kind === 'json' ? voices.status : 0, 405);
-  const hear = await handleVoiceRoutes(
-    makeDeps(async () => ({ ok: true, file: '/x' })),
-    input('voice/hear', 'GET'),
-  );
-  assert.equal(hear?.kind === 'json' ? hear.status : 0, 405);
 });
 
 test('不相干的路径：交回 undefined，让下一个处理器接手', async () => {

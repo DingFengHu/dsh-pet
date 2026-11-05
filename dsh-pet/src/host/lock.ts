@@ -142,8 +142,8 @@ export class LockStore {
   /**
    * 当前是否有任意宠物被占用（测试 / 观测用，同 ./state 的 waiterCount）。
    *
-   * 生产路径上没有人调它：占用期间要挡的两个全局段（sections.balance / sections.workStatus）是
-   * 所有宠物共用一份，宿主跳过写入会连带静音别的宠物，所以那两处改由渲染端按宠物自己忽略。
+   * 生产路径上没有人调它：占用期间要挡的全局段（sections.workStatus）是
+   * 所有宠物共用一份，宿主跳过写入会连带静音别的宠物，所以改由渲染端按宠物自己忽略。
    */
   anyLocked(): boolean {
     for (const petId of [...this.locks.keys()]) {

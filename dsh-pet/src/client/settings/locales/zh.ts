@@ -22,15 +22,7 @@ export const zh = {
   cornerHint: '宠物贴着屏幕的哪个角（桌面端按各自显示器的工作区算）。',
   marginXHint: '距所选角落的水平距离（px），可为任意数字。',
   marginYHint: '距所选角落的垂直距离（px），可为任意数字。',
-  // 「/」命令菜单的行标题（图标由 app.ts 经 command-faces.ts 补上）。
-  'cmd.chat': '对话',
-  'cmd.pet': '桌宠',
-  'cmd.balance': '余额',
   // 设置 → 通用 → 快捷键里的命令标题。
-  'shortcut.open': '打开桌宠对话',
-  'shortcut.chat': '打开对话弹窗',
-  'shortcut.hear': '语音输入',
-  'shortcut.capture': '截图到对话',
   shortcutCardTitle: '快捷键',
   shortcutCardHint: '展开后分两组：桌宠快捷键与全局快捷键。',
   shortcutRowTodo: '待办事项',

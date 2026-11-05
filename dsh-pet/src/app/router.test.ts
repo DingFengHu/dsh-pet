@@ -9,7 +9,6 @@ import { startRouter } from './router.ts';
 async function start(
   routes: RegisteredRoute[] = [],
   log: (message: string) => void = () => {},
-  chatPanelScript?: () => string | undefined,
 ) {
   const security = createRequestSecurity();
   const server = await startRouter(routes, {
@@ -17,7 +16,6 @@ async function start(
     log,
     status: (port) => ({ audit: true, port }),
     landingPage: () => '<html>local app</html>',
-    ...(chatPanelScript ? { chatPanelScript } : {}),
   });
   return { ...server, security, base: `http://127.0.0.1:${server.port}` };
 }
@@ -167,34 +165,3 @@ test('app caps request bodies before plugins/settings and catches synchronous an
   }
 });
 
-test('设置页对话面板脚本：有产物时由 app 路由提供 → 200 且类型与内容正确', async () => {
-  const script = 'window.__CHAT_PANEL__ = 1;';
-  const server = await start(
-    [],
-    () => {},
-    () => script,
-  );
-  try {
-    const response = await fetch(server.base + '/standalone-ai/chat-panel.js');
-    assert.equal(response.status, 200);
-    assert.match(response.headers.get('content-type') ?? '', /^text\/javascript/);
-    assert.equal(await response.text(), script);
-  } finally {
-    await server.close();
-  }
-});
-
-test('设置页对话面板脚本：产物缺失时 → 404 并提示重新构建，而不是静默回空脚本', async () => {
-  const server = await start(
-    [],
-    () => {},
-    () => undefined,
-  );
-  try {
-    const response = await fetch(server.base + '/standalone-ai/chat-panel.js');
-    assert.equal(response.status, 404);
-    assert.match(await response.text(), /重新构建/);
-  } finally {
-    await server.close();
-  }
-});

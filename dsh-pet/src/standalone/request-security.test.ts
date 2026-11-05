@@ -39,10 +39,9 @@ test('capabilities are random, fragment-only, and process-bound', () => {
 test('encoded private routes still require a capability; invalid encodings fail explicitly', () => {
   const security = createRequestSecurity();
   for (const path of [
-    '/dsh-pet-7340/%63hat?pet=main',
-    '/dsh-pet-7340/ch%61t',
-    '/dsh-pet-7340/chat%2Fhistory',
-    '/dsh-pet-7340/%77hisper',
+    '/%73hutdown',
+    '/standalone-ai/%73ettings',
+    '/standalone-ai/settings%3Fx=1',
   ]) {
     for (const method of ['GET', 'HEAD']) {
       const res = response();
@@ -77,7 +76,7 @@ test('encoded private routes still require a capability; invalid encodings fail 
 test('desktop file-origin exception always needs a capability and never relaxes Host checks', () => {
   const security = createRequestSecurity();
   const fileHeaders = { origin: 'null', 'sec-fetch-site': 'cross-site' };
-  for (const path of ['/dsh-pet-7340/config', '/dsh-pet-7340/chat']) {
+  for (const path of ['/dsh-pet-7340/config', '/dsh-pet-7340/todo']) {
     assert.equal(security.authorize(request(fileHeaders, path), response() as unknown as ServerResponse, true), false);
     const headers = { ...fileHeaders, 'x-dsh-pet-token': security.token };
     assert.equal(security.authorize(request(headers, path), response() as unknown as ServerResponse, true), true);
@@ -169,7 +168,7 @@ test('only minimal health, settings shell and known media GET are public; public
     );
     assert.equal(security.authorize(request({}, path, 'POST'), response() as unknown as ServerResponse), false, path);
   }
-  for (const path of ['/standalone-ai/settings', '/dsh-pet-7340/whisper', '/dsh-pet-7340/chat', '/shutdown']) {
+  for (const path of ['/standalone-ai/settings', '/shutdown']) {
     assert.equal(security.authorize(request({}, path), response() as unknown as ServerResponse), false, path);
   }
   for (const path of ['/dsh-pet-7340/config', '/dsh-pet-7340/state']) {

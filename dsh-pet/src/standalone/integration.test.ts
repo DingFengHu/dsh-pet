@@ -24,7 +24,6 @@ import { apply } from '../host/index.ts';
 import { createStandaloneContext, type RegisteredRoute, type StandaloneLogger } from './context.ts';
 import { configPathsFor } from './options.ts';
 import { listenStandaloneServer, type StandaloneServer } from './server.ts';
-import { createRequestSecurity } from './request-security.ts';
 
 /** 静默日志器（插件仍会往 console 打少量 warn，那是它自己的诊断，这里不拦） */
 const silent: StandaloneLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
@@ -81,30 +80,6 @@ async function get(path: string): Promise<{ status: number; text: string; json: 
   return { status: response.status, text, json: () => JSON.parse(text) as unknown };
 }
 
-test('real plugin chat routes cannot bypass the standalone capability using encoded names', async () => {
-  const security = createRequestSecurity();
-  const protectedServer = await listenStandaloneServer({
-    routes: context?.routes ?? [],
-    logger: silent,
-    port: 0,
-    security,
-  });
-  try {
-    const prefix = `http://127.0.0.1:${protectedServer.port}/dsh-pet-7340/`;
-    for (const name of ['chat', '%63hat', 'ch%61t']) {
-      const response = await fetch(prefix + name + '?pet=main');
-      assert.equal(response.status, 403);
-      await response.text();
-    }
-    // 带上有效凭证时，编码后的名字会走到真实插件的参数校验，最终报 pet-required。
-    const response = await fetch(prefix + '%63hat', { headers: { 'X-DSH-Pet-Token': security.token } });
-    assert.equal(response.status, 200);
-    assert.equal(((await response.json()) as { reason: string }).reason, 'pet-required');
-  } finally {
-    await protectedServer.close();
-  }
-});
-
 test('config pet IDs: duplicate IDs return 200 + bad-request without creating a user file', async (t) => {
   const file = configPathsFor(packageRoot, home).userFile;
   assert.equal(existsSync(file), false);
@@ -113,7 +88,6 @@ test('config pet IDs: duplicate IDs return 200 + bad-request without creating a 
     id: 'main',
     name: 'Blue',
     size: 240,
-    balanceEnabled: false,
     display: 'web',
     position: { corner: 'top-right', marginX: 20, marginY: 20 },
   };
@@ -148,23 +122,14 @@ describe('插件宿主半边在独立模式下跑起来了', () => {
       pets: Record<string, unknown>;
     };
     assert.deepEqual(Object.keys(body.sections).sort(), [
-      'balance',
       'config',
       'focusSession',
       'menu',
       'notify',
       'workStatus',
     ]);
-    assert.equal(body.sections.balance?.counter, 0);
-    assert.equal(body.sections.balance?.data, null);
     assert.equal(body.sections.config?.counter, 0, '配置变更信号也没人写过');
     assert.deepEqual(body.pets, {});
-  });
-
-  test('/models 是空清单（独立模式没有 llm 服务，但不报错、不静默失败）', async () => {
-    const response = await get('/dsh-pet-7340/models');
-    assert.equal(response.status, 200);
-    assert.deepEqual(response.json(), { providers: [] });
   });
 
   test('/config/meta 的路径口径与 options.configPathsFor 完全一致（镜像不得漂移）', async () => {

@@ -104,31 +104,14 @@ before(() => {
         /* 源码形态下内置配置不可达，refreshDesktop 会抛给调用方——这里吞掉，不影响路由注册 */
       }
     },
-    // 对外 Cordis 服务（第三方注册余额查询）：与 DSH 一致，provide 返回释放函数
+    // 对外 Cordis 服务：与 DSH 一致，provide 返回释放函数
     provide: (name: string, value: unknown) => {
       provided.set(name, value);
       return noop;
     },
     on: () => noop,
     webServer: { register: (spec: { handler: typeof handler }) => ((handler = spec.handler), noop) },
-    commands: { register: () => noop },
     logger: { warn: () => {}, info: () => {}, debug: () => {}, error: () => {} },
-    // 固定返回一个"没登记余额接口"的服务商：POST /balance 的路径因此是确定的
-    // （matchBalanceProvider 不命中 → S 里写 ok:false/unsupported，而不是靠抛错走到 fetch-error）
-    agentDefaultModel: { currentSelection: () => ({ provider: 'no-such-provider', model: 'x' }) },
-    credentials: { resolve: async () => undefined },
-    // 模型清单路由的数据源（与 DSH 模型选择器同源的宿主 llm 服务）：一个正常服务商 +
-    // 一个列不出模型的服务商（验证单点失败不拖垮整张清单）
-    llm: {
-      listProviders: () => [
-        { id: 'deepseek', name: 'DeepSeek' },
-        { id: 'broken', name: 'Broken' },
-      ],
-      listModels: async (provider: string) => {
-        if (provider === 'broken') throw new Error('adapter does not list models');
-        return [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }];
-      },
-    },
   });
   assert.ok(handler, 'apply() 应注册 /dsh-pet-7340 prefix handler'); // 注册失败则整份测试无意义
 
@@ -171,34 +154,7 @@ after(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe('/models 路由 —— 设置页「AI 模型」下拉框的数据源', () => {
-  test('每个服务商连同它名下的模型一起返回（与 DSH 模型选择器同源）', async () => {
-    const r = await call('/dsh-pet-7340/models');
-    assert.equal(r.status, 200);
-    const body = JSON.parse(r.body) as {
-      providers: Array<{ id: string; name: string; models: Array<{ id: string; name: string }> }>;
-    };
-    assert.deepEqual(body.providers[0], {
-      id: 'deepseek',
-      name: 'DeepSeek',
-      models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }],
-    });
-  });
-
-  test('单个服务商列不出模型 → 只让它空着，不拖垮整张清单', async () => {
-    const r = await call('/dsh-pet-7340/models');
-    const body = JSON.parse(r.body) as { providers: Array<{ id: string; models: unknown[] }> };
-    assert.equal(body.providers.length, 2, '一个服务商列不出模型不得让整个清单变空');
-    assert.deepEqual(body.providers[1].models, []);
-  });
-
-  test('非 GET → 405（只读端点）', async () => {
-    const r = await call('/dsh-pet-7340/models', 'POST');
-    assert.equal(r.status, 405);
-  });
-});
-
-describe('/state + /balance —— 轮询统一状态与余额动作端点', () => {
+describe('/state —— 轮询统一状态', () => {
   test('GET /state 返回 { sections, pets }（初始叶子 counter=0 / data=null）', async () => {
     const r = await call('/dsh-pet-7340/state');
     assert.equal(r.status, 200);
@@ -207,15 +163,14 @@ describe('/state + /balance —— 轮询统一状态与余额动作端点', () 
       pets: Record<string, unknown>;
     };
     assert.deepEqual(Object.keys(body.sections).sort(), [
-      'balance',
       'config',
       'focusSession',
       'menu',
       'notify',
       'workStatus',
     ]);
-    assert.equal(body.sections.balance.counter, 0, '没人写过时 counter=0（前端首拉当基线）');
-    assert.equal(body.sections.balance.data, null);
+    assert.equal(body.sections.notify.counter, 0, '没人写过时 counter=0（前端首拉当基线）');
+    assert.equal(body.sections.notify.data, null);
     assert.equal(body.sections.config.data, null, '配置变更信号也没人写过（counter=0 / data=null）');
     assert.deepEqual(body.pets, {});
   });
@@ -275,27 +230,6 @@ describe('/state + /balance —— 轮询统一状态与余额动作端点', () 
     assert.ok(elapsed >= 180, `应当真的挂起约 200ms，实测 ${elapsed}ms`);
   });
 
-  test('POST /balance 是动作端点：只回 { ok: true }，不返回余额数据', async () => {
-    const r = await call('/dsh-pet-7340/balance', 'POST');
-    assert.equal(r.status, 200);
-    assert.deepEqual(JSON.parse(r.body), { ok: true }, '动作端点不得把余额数据塞进响应');
-  });
-
-  test('GET /balance 已删除 → 405（数据只有 /state 一个出口）', async () => {
-    assert.equal((await call('/dsh-pet-7340/balance', 'GET')).status, 405);
-  });
-
-  test('POST /balance 之后：余额出现在 S 里，且带 manual 标记（前端据此必弹文字说明）', async () => {
-    await call('/dsh-pet-7340/balance', 'POST');
-    const r = await call('/dsh-pet-7340/state');
-    const leaf = (JSON.parse(r.body) as { sections: { balance: { counter: number; data: Record<string, unknown> } } })
-      .sections.balance;
-    assert.ok(leaf.counter > 0, '动作必须推进 counter（否则前端不会渲染）');
-    assert.equal(leaf.data.ok, false, '该服务商没登记余额接口 → 不可用状态也写进 S');
-    assert.equal(leaf.data.reason, 'unsupported');
-    assert.equal(leaf.data.manual, true, '手动触发的标记必须随数据一起写');
-  });
-
   test('旧的 /balance/trigger 已删除 → 不再是一个端点（落到素材兜底 → 404）', async () => {
     const r = await call('/dsh-pet-7340/balance/trigger');
     assert.notEqual(r.status, 200, '触发计数端点应已删除');
@@ -319,10 +253,6 @@ describe('轮询统一后删掉的旧端点 —— 不得复活', () => {
 
   test('/broadcast 的 GET 读端点已删除（数据只有 /state 一个出口）', async () => {
     assert.equal((await call('/dsh-pet-7340/broadcast')).status, 405);
-  });
-
-  test('/whisper 只接受 POST（读端点已删，GET 不再返回文本）', async () => {
-    assert.equal((await call('/dsh-pet-7340/whisper?pet=main', 'GET')).status, 405);
   });
 
   test('/whisper/trigger 已删除（手动碎碎念并入 POST /whisper）', async () => {
@@ -629,38 +559,14 @@ describe('pet 必填 —— 缺省一律 pet-required（issue #122 第 1 条：�
     }
   });
 
-  test('/whisper：不给 pet → pet-required（不再拿空串去生成、再写进没人消费的叶子）', async () => {
-    const r = await call('/dsh-pet-7340/whisper', 'POST');
-    assert.equal(r.status, 200);
-    const body = JSON.parse(r.body) as { ok: boolean; reason: string };
-    assert.equal(body.ok, false);
-    assert.equal(body.reason, 'pet-required');
-  });
-
-  test('/chat：不给 pet → pet-required（GET 与 POST 都是）', async () => {
-    const g = await call('/dsh-pet-7340/chat');
-    assert.equal(g.status, 200);
-    assert.equal((JSON.parse(g.body) as { reason: string }).reason, 'pet-required');
-    const p = await call('/dsh-pet-7340/chat', 'POST', JSON.stringify({ text: '在吗' }));
-    assert.equal(p.status, 200);
-    assert.equal((JSON.parse(p.body) as { reason: string }).reason, 'pet-required');
-  });
-
-  test('/chat：方法不对仍是 405（pet 校验不抢在协议层错误前面）', async () => {
-    assert.equal((await call('/dsh-pet-7340/chat', 'PUT')).status, 405);
-    // DELETE 自删除记忆接口起是合法方法（见 chat-delete.test.ts），这里改用同样不被接受的 PATCH
-    assert.equal((await call('/dsh-pet-7340/chat', 'PATCH')).status, 405);
-  });
 });
 
 describe('surface 必填 —— 缺省/非法一律 bad-request，且短路在读盘之前（issue #122 第 1 条）', () => {
   // 与 pet 空串同一处境：surface 的参数级校验放在读配置之前，所以这一组在"配置不可达"的
   // 源码形态下照样能测——断言 reason 同时钉住了短路顺序（是 bad-request，不是 generate-error）。
-  test('/lock、/whisper、/chat POST：不给 surface / 非法值 → bad-request', async () => {
+  test('/lock POST：不给 surface / 非法值 → bad-request', async () => {
     const cases: Array<[string, string, string | undefined]> = [
       ['lock', 'POST', '{}'],
-      ['whisper', 'POST', undefined],
-      ['chat', 'POST', JSON.stringify({ text: '在吗' })],
     ];
     for (const [path, method, body] of cases) {
       for (const q of ['', '&surface=nope', '&surface=WEB', '&surface=']) {
@@ -673,12 +579,8 @@ describe('surface 必填 —— 缺省/非法一律 bad-request，且短路在�
     }
   });
 
-  test('/chat GET 与 /lock/release 不校验 surface：照旧走到读配置那一步（generate-error）', async () => {
-    // 释放必须永远能成功（否则宠物中途被隐藏就撤不掉锁）；GET 是读记忆，与显示在哪一端无关。
-    // 两者都忽略 surface——连非法值也不该报 bad-request。
-    const g = await call('/dsh-pet-7340/chat?pet=main&surface=nope');
-    assert.equal(g.status, 200);
-    assert.equal((JSON.parse(g.body) as { reason: string }).reason, 'generate-error');
+  test('/lock/release 不校验 surface：照旧走到读配置那一步（generate-error）', async () => {
+    // 释放必须永远能成功（否则宠物中途被隐藏就撤不掉锁）——连非法值也不该报 bad-request。
     const rel = await call('/dsh-pet-7340/lock/release?pet=main&surface=nope', 'POST', '{}');
     assert.equal(rel.status, 200);
     assert.equal((JSON.parse(rel.body) as { reason: string }).reason, 'generate-error');
@@ -713,25 +615,6 @@ describe('/pose —— 桌面端实况（GET 查询 / POST 上报），与 surfa
     );
     assert.equal(p.status, 200);
     assert.equal((JSON.parse(p.body) as { reason: string }).reason, 'generate-error');
-  });
-});
-
-describe('?rounds= —— 非法值 bad-request，合法值不误杀（issue #141）', () => {
-  // 源码形态下配置不可达：能报 bad-request 就证明校验抢在读盘之前（否则会是 generate-error）。
-  test('非法 → bad-request（负数 / 小数 / 非数字 / 超上限）', async () => {
-    for (const bad of ['-1', '1.5', 'abc', '201']) {
-      const r = await call(`/dsh-pet-7340/chat?pet=main&rounds=${bad}`);
-      const body = JSON.parse(r.body) as { ok: boolean; reason: string };
-      assert.equal(body.ok, false, bad);
-      assert.equal(body.reason, 'bad-request', bad);
-    }
-  });
-
-  test('合法 / 空串 / 不传 → 不报 bad-request（本文件里走到 generate-error）', async () => {
-    for (const q of ['&rounds=0', '&rounds=3', '&rounds=', '']) {
-      const r = await call(`/dsh-pet-7340/chat?pet=main${q}`);
-      assert.equal((JSON.parse(r.body) as { reason: string }).reason, 'generate-error', q);
-    }
   });
 });
 
@@ -831,38 +714,6 @@ describe('/work-status —— 外部写入工作状态', () => {
       JSON.stringify({ state: 'working', task: 'x'.repeat(9000) }),
     );
     assert.equal(big.status, 413);
-  });
-});
-
-describe('对外 Cordis 服务 —— 第三方注册余额查询', () => {
-  interface BalanceApi {
-    register: (def: { id: string; fetch: (ctx: { provider: string }) => Promise<unknown> }) => () => void;
-    list: () => { builtin: string[]; external: string[] };
-  }
-  const api = (): BalanceApi => {
-    const value = provided.get('petApi7340') as { balance?: BalanceApi } | undefined;
-    assert.ok(value?.balance, 'apply() 必须挂出 petApi7340.balance');
-    return value.balance;
-  };
-
-  test('挂出的是 register + list（没有 unregister：注销走 register 的返回值）', () => {
-    const balance = api() as unknown as Record<string, unknown>;
-    assert.equal(typeof balance.register, 'function');
-    assert.equal(typeof balance.list, 'function');
-    assert.equal('unregister' in balance, false);
-  });
-
-  test('通过服务注册后 list 可见，调用 disposer 后消失', () => {
-    const dispose = api().register({
-      id: 'route-test-plugin',
-      fetch: async ({ provider }) => ({ ok: true, provider, shape: 'points', data: { unit: '积分', total: '1' } }),
-    });
-    try {
-      assert.ok(api().list().external.includes('route-test-plugin'));
-    } finally {
-      dispose();
-    }
-    assert.equal(api().list().external.includes('route-test-plugin'), false);
   });
 });
 

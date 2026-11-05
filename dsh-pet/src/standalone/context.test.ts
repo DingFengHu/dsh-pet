@@ -31,7 +31,6 @@ type Standalone = ReturnType<typeof createStandaloneContext>;
 const effectOf = (context: Standalone): ((fn: () => unknown, label?: string) => unknown) =>
   context.ctx.effect as (fn: () => unknown, label?: string) => unknown;
 const onOf = (context: Standalone): (() => unknown) => context.ctx.on as () => unknown;
-const commandsOf = (context: Standalone): { register(): unknown } => context.ctx.commands as { register(): unknown };
 const webServerOf = (context: Standalone): { port: number; register(spec: RegisteredRoute): unknown } =>
   context.ctx.webServer as { port: number; register(spec: RegisteredRoute): unknown };
 describe('createStandaloneContext —— 与 Cordis 对齐的语义', () => {
@@ -93,9 +92,8 @@ describe('createStandaloneContext —— 与 Cordis 对齐的语义', () => {
     assert.equal(webServer.port, 31234, '监听完成后插件必须读到真实端口');
   });
 
-  test('on() / commands.register() 必须返回可调用对象（插件把它们当释放函数用）', () => {
+  test('on() 必须返回可调用对象（插件把它们当释放函数用）', () => {
     const context = createStandaloneContext({ port: 1, logger: silentLogger() });
     assert.equal(typeof onOf(context)(), 'function');
-    assert.equal(typeof commandsOf(context).register(), 'function');
   });
 });
