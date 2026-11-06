@@ -180,6 +180,10 @@
       .ln b.out {
         color: var(--rose);
       }
+      .ln b.stale {
+        color: var(--mute);
+        text-decoration: line-through dotted;
+      }
       .ln.click {
         cursor: pointer;
       }
@@ -369,12 +373,20 @@
         const w = d.weekly || d.fiveHour;
         const label = d.weekly ? ' 周' : ' 5h';
         const stamp = w.remainingPercent <= 0.5 ? h('span', 'stamp', '吃光啦') : null;
-        const out = [line(name + label, pct(w.remainingPercent), level(w.remainingPercent), stamp)];
+        const stale = Boolean(d.liveError);
+        const out = [
+          line(
+            name + label,
+            pct(w.remainingPercent),
+            stale ? 'stale' : level(w.remainingPercent),
+            stale ? null : stamp,
+          ),
+        ];
         const notes = [];
         if (w.resetsAt) notes.push(`${fmtDate.format(new Date(w.resetsAt * 1000))} · ${until(w.resetsAt * 1000)}`);
         if (d.weekly && d.fiveHour) notes.push(`5h 剩 ${pct(d.fiveHour.remainingPercent)}`);
         if (notes.length) out.push(h('div', 'note', notes.join(' · ')));
-        out.push(warn(src, d.liveError ? `实时没读到，显示${ago(d.updatedAt)}的` : null));
+        out.push(warn(src, stale ? `实时没读到：${d.liveError} 上面是${ago(d.updatedAt)}的旧数据` : null));
         return out;
       }
 

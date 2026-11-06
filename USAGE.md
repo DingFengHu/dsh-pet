@@ -4,13 +4,13 @@
 
 ## 面板内容
 
-| 区块              | 内容                                                                  | 来源                                                                                          |
-| ----------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| 订阅额度 · Codex  | 周剩余、5 小时剩余、重置倒计时（纽约时间）、套餐名                    | `codex app-server --stdio` 的 `account/rateLimits/read`（Codex CLI 自己管登录）               |
-| 订阅额度 · Claude | 周剩余、5 小时剩余、重置倒计时                                        | Claude Code CLI 的 `get_usage` 控制请求（不发模型请求）；上游限流时显示上次实时数据并标注时间 |
-| Codex API         | 赠送余额 / 赠送总额、本期花费、到期日、按 Key 展开花费 / 请求 / token | OpenAI 组织 Admin Key 读 costs / usage；赠送额度读专用 Chrome 里的 Credit grants 页           |
-| Claude API        | 赠送余额（多笔叠加）、最近到期金额、按 Key 展开                       | 专用 Chrome 里 Claude Console 的同源请求                                                      |
-| DeepSeek          | 余额（充值 / 赠送）                                                   | DeepSeek API Key 读 `/user/balance`                                                           |
+| 区块              | 内容                                                                  | 来源                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 订阅额度 · Codex  | 周剩余、5 小时剩余、重置倒计时（纽约时间）、套餐名                    | `codex app-server --stdio` 的 `account/rateLimits/read`（Codex CLI 自己管登录）                                                  |
+| 订阅额度 · Claude | 周剩余、5 小时剩余、重置倒计时                                        | Claude Code CLI 的 `get_usage` 控制请求（不发模型请求）；上游限流或 CLI 未登录时显示上次实时数据（数字变灰）并写明原因与数据时间 |
+| Codex API         | 赠送余额 / 赠送总额、本期花费、到期日、按 Key 展开花费 / 请求 / token | OpenAI 组织 Admin Key 读 costs / usage；赠送额度读专用 Chrome 里的 Credit grants 页                                              |
+| Claude API        | 赠送余额（多笔叠加）、最近到期金额、按 Key 展开                       | 专用 Chrome 里 Claude Console 的同源请求                                                                                         |
+| DeepSeek          | 余额（充值 / 赠送）                                                   | DeepSeek API Key 读 `/user/balance`                                                                                              |
 
 - 面板可见时每 60 秒刷新一次，有来源正在读取时 3 秒后再取。面板关着时每 3 分钟后台预热一次 Codex / Claude 套餐与 DeepSeek 余额（不开浏览器标签），点开即是新数；走专用 Chrome 标签的 Codex API 赠送额度与 Claude API 仍只在面板打开时读取。
 - 每个来源独立节流与缓存：套餐 1 分钟，API 用量 10 分钟，OpenAI 赠送额度页 6 小时。点刷新按钮可提前读取（各来源仍有最短间隔）。
