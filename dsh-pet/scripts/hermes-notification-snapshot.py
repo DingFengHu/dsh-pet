@@ -251,40 +251,10 @@ async def snapshot():
     return out
 
 
-HUNIU_LIMIT = 64
-
-
-def huniu_snapshot(root):
-    """Read-only inbound ids from the Hermes·虎妞 bridge ledger. Never message text or keys."""
-    import sqlite3
-    out = {"available": False, "sessionId": None, "messages": []}
-    try:
-        home = json.loads((root / "home-session.json").read_text(encoding="utf-8"))
-        sid = home.get("session_id") if isinstance(home, dict) else None
-        out["sessionId"] = text(sid) or None
-    except Exception:
-        pass
-    db = root / "state" / "bridge.sqlite3"
-    if not db.is_file():
-        return out
-    con = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
-    try:
-        rows = con.execute(
-            "SELECT id, created FROM messages WHERE direction = 'huniu' AND status != 'cancelled' "
-            "ORDER BY created DESC LIMIT ?", (HUNIU_LIMIT,)).fetchall()
-    finally:
-        con.close()
-    out["messages"] = [{"id": text(rid), "created": float(created)} for rid, created in rows
-                       if isinstance(rid, str) and rid and isinstance(created, (int, float))]
-    out["available"] = True
-    return out
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hermes-root", required=True, type=Path)
     parser.add_argument("--home", type=Path, default=None)
-    parser.add_argument("--huniu-dir", type=Path, default=None)
     args = parser.parse_args()
     # Never print supplied paths or exception text: either may include credentials.
     if not args.hermes_root.is_absolute() or not (args.hermes_root / "hermes_constants.py").is_file():
@@ -305,14 +275,6 @@ def main():
     except Exception:
         result = {"ownerId": "", "baseUrl": "", "profiles": [], "decisions": [],
                   "jobs": [], "runs": [], "incomplete": True, "code": "snapshot_failed"}
-    # The bridge ledger is independent of the gateway: a gateway outage must not hide 虎妞.
-    if args.huniu_dir is not None:
-        try:
-            if not args.huniu_dir.is_absolute() or not args.huniu_dir.is_dir():
-                raise ValueError("invalid_huniu_dir")
-            result["huniu"] = huniu_snapshot(args.huniu_dir)
-        except Exception:
-            result["huniu"] = {"available": False, "sessionId": None, "messages": []}
     print(json.dumps(result, ensure_ascii=True, separators=(",", ":"), allow_nan=False))
     return 0
 
