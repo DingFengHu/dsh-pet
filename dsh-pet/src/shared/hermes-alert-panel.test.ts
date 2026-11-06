@@ -4,17 +4,17 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { HERMES_ALERT_CSS, hermesTitle } from './hermes-alert-panel.ts';
 
-test('标题统一以「虎哥，」开头，已带来源时不重复 Hermes 前缀', () => {
-  assert.equal(hermesTitle('Hermes 需要你确认'), '虎哥，Hermes 需要你确认');
-  assert.equal(hermesTitle('Hermes 定时任务失败', 2), '虎哥，Hermes 定时任务失败 (2)');
-  assert.equal(hermesTitle('Claude 等你批准 · dsh-pet'), '虎哥，Claude 等你批准 · dsh-pet');
-  assert.equal(hermesTitle('Windows 计划任务失败 · memwatch'), '虎哥，Windows 计划任务失败 · memwatch');
-  assert.equal(hermesTitle('任务失败'), '虎哥，Hermes · 任务失败');
+test('标题统一以「老大，」开头，已带来源时不重复 Hermes 前缀', () => {
+  assert.equal(hermesTitle('Hermes 需要你确认'), '老大，Hermes 需要你确认');
+  assert.equal(hermesTitle('Hermes 定时任务失败', 2), '老大，Hermes 定时任务失败 (2)');
+  assert.equal(hermesTitle('Claude 等你批准 · dsh-pet'), '老大，Claude 等你批准 · dsh-pet');
+  assert.equal(hermesTitle('Windows 计划任务失败 · memwatch'), '老大，Windows 计划任务失败 · memwatch');
+  assert.equal(hermesTitle('任务失败'), '老大，Hermes · 任务失败');
 });
 
-test('虎妞转发的消息标题为「虎哥，虎妞说：」', () => {
-  assert.equal(hermesTitle('虎妞'), '虎哥，虎妞说：');
-  assert.equal(hermesTitle(' 虎妞 ', 3), '虎哥，虎妞说（3 条）：');
+test('虎妞转发的消息标题为「老大，虎妞说：」', () => {
+  assert.equal(hermesTitle('虎妞'), '老大，虎妞说：');
+  assert.equal(hermesTitle(' 虎妞 ', 3), '老大，虎妞说（3 条）：');
 });
 
 test('只有正文改用系统正常字体，其余继承气泡字体；不使用假粗体', () => {
