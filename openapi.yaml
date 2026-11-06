@@ -92,6 +92,8 @@ tags:
     description: 字体、通知图标、表情包、动画素材
   - name: Voice
     description: 语音合成——参数校验、排队与缓存都在宿主，成功时直接返回 mp3 文件
+  - name: Usage
+    description: AI 用量面板（Shift+点击大肥鱼）的数据快照——只读、凭据只在宿主内存里
 
 paths:
   /dsh-pet-7340/state:
@@ -1987,6 +1989,69 @@ paths:
         "405":
           description: 方法不是 POST。
 
+  /dsh-pet-7340/usage:
+    get:
+      tags: [Usage]
+      operationId: getUsage
+      summary: AI 用量快照
+      description: |
+        用量面板的数据源：Codex / Claude 套餐额度、Codex / Claude API 花费与 DeepSeek 余额，
+        每个来源各自缓存与节流，读取从不阻塞调用方（最多等约 1.5 秒让快的来源先回来）。
+
+        - 面板关着时宿主每 3 分钟后台预热不开浏览器标签的来源（套餐额度、DeepSeek）；
+          走专用 Chrome 标签的来源（OpenAI 赠送额度、Claude API）只在面板打开、被本端点轮询时读取。
+        - `?refresh=1` 表示用户点了刷新：忽略常规节流，但仍受每个来源的最短间隔约束。
+        - 应答只含数字与错误文案，**从不包含凭据**。
+        - 每个来源是 `{ data, error, stale, refreshing, okAt }`：`data` 是上次成功的数据（从未成功为 `null`），
+          `stale` 表示最近一次失败但仍保留旧数据。
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          description: 传 `1` 表示手动刷新。
+          schema:
+            type: string
+            enum: ["1"]
+      responses:
+        "200":
+          description: |
+            成功为整份快照（顶层无 `ok` 字段）；宿主未启用用量面板时为
+            `{ ok: false, reason: "unsupported", message }`。
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required:
+                      [
+                        codex,
+                        claude,
+                        codexApi,
+                        claudeApi,
+                        deepseek,
+                        generatedAt,
+                      ]
+                    properties:
+                      codex:
+                        $ref: "#/components/schemas/UsageSource"
+                      claude:
+                        $ref: "#/components/schemas/UsageSource"
+                      codexApi:
+                        $ref: "#/components/schemas/UsageSource"
+                      claudeApi:
+                        $ref: "#/components/schemas/UsageSource"
+                      deepseek:
+                        $ref: "#/components/schemas/UsageSource"
+                      generatedAt:
+                        type: integer
+                        format: int64
+                        description: 快照生成时间（毫秒时间戳）。
+                  - $ref: "#/components/schemas/FailureResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "500":
+          description: 用量服务内部错误。
+
   /dsh-pet-7340/voice/voices:
     get:
       tags: [Voice]
@@ -2710,6 +2775,26 @@ components:
             $ref: "#/components/schemas/FailureResponse"
 
   schemas:
+    UsageSource:
+      type: object
+      description: 单个用量来源的缓存快照。
+      required: [data, error, stale, refreshing, okAt]
+      properties:
+        data:
+          description: 上次成功读到的数据（结构随来源而定）；从未成功为 `null`。
+        error:
+          type: [string, "null"]
+          description: 最近一次读取的错误文案；最近一次成功时为 `null`。
+        stale:
+          type: boolean
+          description: 最近一次读取失败但仍保留旧数据。
+        refreshing:
+          type: boolean
+          description: 是否有读取正在进行。
+        okAt:
+          type: [integer, "null"]
+          format: int64
+          description: 最近一次成功的时间（毫秒时间戳）。
     OkResponse:
       type: object
       required: [ok]
