@@ -13,12 +13,21 @@ import {
   diskSchema,
   foldSnapshot,
   HUNIU_TITLE,
+  isExternalKind,
+  type ExternalKind,
   makeAlertId,
   snapshotSchema,
   sortPending,
   type HermesDisk,
 } from './hermes-policy.ts';
 import type { PollStateStore } from './state.ts';
+import type { ExternalAlertSink, InboxEvent } from './pet-inbox.ts';
+
+/** 收件事件映射到提醒类别。 */
+function externalKind(event: InboxEvent): ExternalKind {
+  if (event.source === 'windows') return 'win-fail';
+  return event.kind === 'decision' ? 'claude' : 'claude-fail';
+}
 
 /** 自有状态文件名，未启用且从未存储时不触碰共享状态。 */
 export const HERMES_STATE_FILE = 'hermes-alerts-state.json';
@@ -148,11 +157,17 @@ export function createHermesAlerts(options: HermesAlertsOptions) {
         try {
           await load();
           if (!disk!.pending.some((entry) => entry.id === id)) return false;
-          if (disk!.dismissed.length >= 2048 && !disk!.dismissed.includes(id))
+          if (
+            disk!.dismissed.length >= 2048 &&
+            !disk!.dismissed.includes(id) &&
+            !disk!.pending.some((entry) => entry.id === id && isExternalKind(entry.kind))
+          )
             throw new Error('state-capacity-exceeded');
+          // 外部提醒由生产者去重（工具调用 id / 任务状态切换），不占永久 dismissed 名额。
+          const external = disk!.pending.some((entry) => entry.id === id && isExternalKind(entry.kind));
           await commit({
             ...disk!,
-            dismissed: [...new Set([...disk!.dismissed, id])],
+            dismissed: external ? disk!.dismissed : [...new Set([...disk!.dismissed, id])],
             pending: disk!.pending.filter((entry) => entry.id !== id),
           });
           publish();
@@ -188,12 +203,68 @@ export function createHermesAlerts(options: HermesAlertsOptions) {
         publish();
         return 'shown';
       }),
+    /** 收件目录事件：同 source+key 幂等，写盘成功后才发布。 */
+    pushExternal: (event: InboxEvent): Promise<'shown' | 'duplicate'> =>
+      run(async () => {
+        if (stopped) throw new Error('stopped');
+        await load();
+        const kind = externalKind(event);
+        const id = makeAlertId(kind, [event.source, event.key]);
+        if (disk!.dismissed.includes(id) || disk!.pending.some((entry) => entry.id === id)) return 'duplicate';
+        if (disk!.pending.length >= 512) throw new Error('state-capacity-exceeded');
+        await commit(
+          diskSchema.parse({
+            ...disk!,
+            pending: sortPending([
+              ...disk!.pending,
+              {
+                id,
+                profile: 'default',
+                kind,
+                title: event.title.slice(0, 200),
+                message: (event.text.trim() || '（无详情）').slice(0, 4096),
+                at: event.at,
+                ...(event.session ? { session: event.session } : {}),
+              },
+            ]),
+          }),
+        );
+        publish();
+        return 'shown';
+      }),
+    /** 用户已在该 Claude 会话回话：清掉该会话在回话之前的决定提醒，返回清掉的条数。 */
+    resolveExternal: (source: InboxEvent['source'], session: string, at: number): Promise<number> =>
+      run(async () => {
+        if (stopped) throw new Error('stopped');
+        await load();
+        if (source !== 'claude') return 0;
+        const keep = disk!.pending.filter(
+          (entry) => !(entry.kind === 'claude' && entry.session === session && entry.at <= at),
+        );
+        const removed = disk!.pending.length - keep.length;
+        if (removed) {
+          await commit({ ...disk!, pending: keep });
+          publish();
+        }
+        return removed;
+      }),
     /** 离线不会清空已发布提醒。 */
     offline: (code = 'hermes-unavailable'): void => fail(code),
     /** 停止后迟到结果不能再写共享状态。 */
     stop: (): void => {
       stopped = true;
     },
+  };
+}
+
+/** 收件目录与 Windows 巡检只拿到这两个写入口。 */
+export function externalSink(alerts: {
+  pushExternal: ExternalAlertSink['push'];
+  resolveExternal: ExternalAlertSink['resolve'];
+}): ExternalAlertSink {
+  return {
+    push: (event) => alerts.pushExternal(event),
+    resolve: (source, session, at) => alerts.resolveExternal(source, session, at),
   };
 }
 

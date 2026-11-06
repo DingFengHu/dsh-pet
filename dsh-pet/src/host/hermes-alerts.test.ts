@@ -224,3 +224,100 @@ test('确认路由校验精确对象与未知 id，成功仅本地确认', async
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+const ext = (extra: Record<string, unknown> = {}) =>
+  ({
+    v: 1,
+    source: 'claude',
+    kind: 'decision',
+    key: 'ask:s1:tu1',
+    title: 'Claude 要你做决定 · dsh-pet',
+    text: '用哪个方案？',
+    session: 's1',
+    at: 100,
+    ...extra,
+  }) as never;
+
+test('外部提醒：显示原文、同 key 幂等、Hermes 快照折叠后仍保留', async () => {
+  const { dir, file, state, alerts } = await fixture();
+  try {
+    assert.equal(await alerts.pushExternal(ext()), 'shown');
+    assert.equal(await alerts.pushExternal(ext()), 'duplicate');
+    await alerts.pushExternal(
+      ext({
+        source: 'windows',
+        kind: 'task-failed',
+        key: 'win:Kofi:t',
+        title: 'Windows 计划任务失败 · Kofi',
+        text: '',
+        session: undefined,
+        at: 50,
+      }),
+    );
+    await alerts.accept(snapshot());
+    const alerts1 = view(state).alerts;
+    // 等决定的两类同在最前，失败在后。
+    assert.deepEqual(
+      alerts1
+        .slice(0, 2)
+        .map((a) => a.title)
+        .sort(),
+      ['Claude 要你做决定 · dsh-pet', 'Hermes 需要你确认'],
+    );
+    assert.equal(alerts1[2]!.title, 'Windows 计划任务失败 · Kofi');
+    const claude = alerts1.find((a) => a.title.startsWith('Claude'))!;
+    assert.equal(claude.message, '用哪个方案？');
+    assert.equal(claude.url, undefined);
+    assert.equal(alerts1[2]!.message, '（无详情）');
+    const reloaded = createHermesAlerts({ file, state: new PollStateStore(), petId: () => 'main' });
+    await reloaded.initialize();
+    assert.equal(await reloaded.pushExternal(ext()), 'duplicate');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('外部提醒确认后不占用永久 dismissed，会话回话清掉该会话的决定', async () => {
+  const { dir, file, state, alerts } = await fixture();
+  try {
+    await alerts.pushExternal(ext());
+    await alerts.pushExternal(ext({ key: 'ask:s1:tu2' }));
+    await alerts.pushExternal(ext({ key: 'ask:s2:tu3', session: 's2' }));
+    await alerts.pushExternal(ext({ kind: 'task-failed', key: 'taskfail:s1', title: 'Claude 定时任务失败 · x' }));
+    const first = view(state).alerts.find((a) => a.message === '用哪个方案？')!;
+    assert.equal(await alerts.ack(first.id), true);
+    const disk = JSON.parse(await readFile(file, 'utf8'));
+    assert.deepEqual(disk.dismissed, []);
+    await alerts.pushExternal(ext({ key: 'ask:s1:later', text: '回话之后的新问题', at: 500 }));
+    assert.equal(await alerts.resolveExternal('claude', 's1', 200), 1);
+    assert.equal(await alerts.resolveExternal('windows', 's2', 999), 0);
+    // 回话之后才问的新问题保留，s2 的不动，失败提醒不受回话影响。
+    assert.deepEqual(
+      view(state)
+        .alerts.map((a) => a.message)
+        .sort(),
+      ['回话之后的新问题', '用哪个方案？', '用哪个方案？'].sort(),
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('外部提醒写盘失败不发布、不吞事件', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-hermes-'));
+  try {
+    const state = new PollStateStore();
+    const alerts = createHermesAlerts({
+      file: join(dir, 'h.json'),
+      state,
+      petId: () => 'main',
+      persist: async () => {
+        throw new Error('disk');
+      },
+    });
+    await assert.rejects(alerts.pushExternal(ext()));
+    assert.equal(state.read().sections.hermesAlerts?.data ?? null, null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

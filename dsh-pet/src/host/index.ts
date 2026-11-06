@@ -16,7 +16,9 @@ import { createWorkStatusBridge } from './plugin/work-status-bridge.ts';
 import { registerTodoReminders } from './plugin/todo-reminders.ts';
 import { createVoiceService } from './voice/speak.ts';
 import { TODO_FILE_NAME, TodoStore } from './todo/store.ts';
-import { createHermesAlerts, HERMES_STATE_FILE } from './hermes-alerts.ts';
+import { createHermesAlerts, externalSink, HERMES_STATE_FILE } from './hermes-alerts.ts';
+import { startPetInbox } from './pet-inbox.ts';
+import { startWindowsTaskWatch } from './windows-tasks.ts';
 import { startHermesPolling } from './hermes-poll.ts';
 import { startHuniuInbox } from './huniu-inbox.ts';
 import { createUsageService } from './usage/index.ts';
@@ -88,6 +90,14 @@ export function apply(ctx: any): void {
   ctx.effect(
     () => startHuniuInbox({ userRoot, alerts: hermesAlerts, log: (line) => log.info?.(line) }),
     'dsh-pet: 虎妞单向收件口',
+  );
+  ctx.effect(
+    () => startPetInbox({ userRoot, sink: externalSink(hermesAlerts) }),
+    'dsh-pet: Claude/Windows 提醒收件目录',
+  );
+  ctx.effect(
+    () => startWindowsTaskWatch({ userRoot, sink: externalSink(hermesAlerts), log: (line) => log.info?.(line) }),
+    'dsh-pet: Windows 计划任务失败巡检',
   );
 
   const desktopHelper = createDesktopHelper({

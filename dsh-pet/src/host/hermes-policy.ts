@@ -11,7 +11,7 @@ const storedId = z
   .max(256)
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/);
 /** 本地提醒标识只接受完整哈希。 */
-export const alertId = z.string().regex(/^hermes-(decision|cron|huniu)-[a-f0-9]{64}$/);
+export const alertId = z.string().regex(/^hermes-(decision|cron|huniu|claude|claude-fail|win-fail)-[a-f0-9]{64}$/);
 /** 跨进程快照只保留提醒所需投影，数组均有上限。 */
 export const snapshotSchema = z.object({
   profiles: z.array(z.object({ name: profile, available: z.boolean(), baseUrl: text.optional() })).max(32),
@@ -65,8 +65,23 @@ const hermesPendingSchema = z
     sessionId: storedId.optional(),
   })
   .strict();
+/** 收件目录来的外部提醒：Claude 等你决定 / 定时任务失败、Windows 计划任务失败。 */
+export const EXTERNAL_KINDS = ['claude', 'claude-fail', 'win-fail'] as const;
+export type ExternalKind = (typeof EXTERNAL_KINDS)[number];
+const externalPendingSchema = z
+  .object({
+    id: alertId,
+    profile: z.literal('default'),
+    kind: z.enum(EXTERNAL_KINDS),
+    title: z.string().min(1).max(200),
+    message: z.string().min(1).max(4096),
+    at: z.number().finite(),
+    /** 生产者会话 id，只用于“用户已回话”时清掉该会话的决定，不生成链接。 */
+    session: z.string().max(128).optional(),
+  })
+  .strict();
 /** Host 内部持久化提醒，比共享 UI 契约多带 profile 与 kind。 */
-export const pendingSchema = z.union([hermesPendingSchema, huniuPendingSchema]);
+export const pendingSchema = z.union([hermesPendingSchema, huniuPendingSchema, externalPendingSchema]);
 /** 自有状态严格验证，不覆盖损坏文件。 */
 export const diskSchema = z
   .object({
@@ -84,7 +99,7 @@ export type HermesDisk = z.infer<typeof diskSchema>;
 export type HermesSnapshot = z.infer<typeof snapshotSchema>;
 
 /** 构造无分隔歧义的稳定标识。 */
-export function makeAlertId(kind: 'decision' | 'cron' | 'huniu', parts: readonly string[]): string {
+export function makeAlertId(kind: 'decision' | 'cron' | 'huniu' | ExternalKind, parts: readonly string[]): string {
   return `hermes-${kind}-${createHash('sha256').update(JSON.stringify(parts)).digest('hex')}`;
 }
 
@@ -92,14 +107,19 @@ function validSession(value: string | null | undefined): string | undefined {
   return typeof value === 'string' && storedId.safeParse(value).success ? value : undefined;
 }
 
-const KIND_ORDER = { decision: 0, huniu: 1, cron: 2 } as const;
+const KIND_ORDER = { decision: 0, claude: 1, huniu: 2, cron: 3, 'claude-fail': 4, 'win-fail': 4 } as const;
 
-/** 待确认请求在前，虎妞消息按收到顺序居中，定时任务失败最后。 */
+/** 外部提醒（Claude、Windows）只经本地确认或会话回话消失，不进 Hermes 快照折叠。 */
+export function isExternalKind(kind: string): kind is ExternalKind {
+  return (EXTERNAL_KINDS as readonly string[]).includes(kind);
+}
+
+/** 待确认请求在前，虎妞消息居中，各类失败最后；同一档位要么都带时间要么都不带，按时间或 id 排。 */
 export function sortPending(entries: HermesDisk['pending']): HermesDisk['pending'] {
   return entries.sort(
     (left, right) =>
       KIND_ORDER[left.kind] - KIND_ORDER[right.kind] ||
-      (left.kind === 'huniu' && right.kind === 'huniu' ? left.at - right.at : 0) ||
+      ('at' in left && 'at' in right ? left.at - right.at : 0) ||
       left.id.localeCompare(right.id),
   );
 }
@@ -210,7 +230,7 @@ export function alertView(entry: HermesDisk['pending'][number]): {
   message: string;
   url?: string;
 } {
-  const sessionId = entry.kind === 'huniu' ? undefined : validSession(entry.sessionId);
+  const sessionId = 'sessionId' in entry ? validSession(entry.sessionId) : undefined;
   const url = sessionId && entry.profile === 'default' ? `hermes://open/${encodeURIComponent(sessionId)}` : undefined;
   return {
     id: entry.id,
