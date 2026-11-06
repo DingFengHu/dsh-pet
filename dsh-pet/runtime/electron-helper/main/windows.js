@@ -268,6 +268,8 @@ function createWindows({
       bridge: isBridge ? '1' : '0',
       openTarget,
       scale: String(scale),
+      // 逐屏尺寸适配：短边小于参考值（默认 2K 的 1440）的屏上按比例缩小，渲染端落定后切换（见 screen-fit.js）
+      refScreenPx: String(dpi.refScreenPx),
       petIndex: String(pet.index),
       workAreaW: String(geo.hull.width),
       workAreaH: String(geo.hull.height),

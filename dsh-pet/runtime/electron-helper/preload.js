@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld('petBridge', {
       marginT,
     });
   },
+  // 逐屏尺寸适配：换屏落定后改页面缩放（主进程 setZoomFactor）
+  setZoom(zoom) {
+    ipcRenderer.send('pet:set-zoom', Number(zoom));
+  },
   // 点击穿透翻转：窗口默认整窗穿透，渲染端在光标进出身体命中区时上报。
   setInteractive(interactive) {
     ipcRenderer.send('pet:set-interactive', !!interactive);

@@ -70,6 +70,16 @@ function registerIpc({ ipcMain, petWindows, shell, openTarget, petRoute }) {
     }
   });
 
+  // 逐屏尺寸适配：渲染端换屏落定后请求新的页面缩放（与 CONFIG.scale 同源，见 sprite/screen-fit.js）
+  ipcMain.on('pet:set-zoom', (event, zoom) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const z = Number(zoom);
+    if (!win || win.isDestroyed() || !Number.isFinite(z) || z < 0.1 || z > 8) return;
+    // 坐标单位跟着缩放变了：去重缓存作废，下一帧必须真的重设一次窗口
+    petWindows.state.lastRequestedBounds.delete(win.id);
+    win.webContents.setZoomFactor(z);
+  });
+
   // 飞行状态上报（碰撞站场）：renderer 飞行中每 ~30ms 上报一次自己的位置/速度/尺寸
   ipcMain.on('pet:report-flight', (event, state) => {
     const win = BrowserWindow.fromWebContents(event.sender);

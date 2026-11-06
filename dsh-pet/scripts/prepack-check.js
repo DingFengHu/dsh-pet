@@ -85,6 +85,8 @@ const required = [
   'runtime/electron-helper/sprite/input.js', // 桌面模式指针与命中（同上）
   'runtime/electron-helper/sprite/init.js', // 桌面模式构建期初始化（同上）
   'runtime/electron-helper/sprite/window-fit.js', // 桌面模式窗口落位与钳制补偿（sprite.js 的原型扩展，须在其后加载）
+  'runtime/electron-helper/screen-fit.js', // 桌面模式逐屏尺寸适配纯换算（index.html 与 main/dpi.js 共用，缺了会启动即崩）
+  'runtime/electron-helper/sprite/screen-fit.js', // 桌面模式逐屏尺寸适配（sprite.js 的原型扩展，须在其后加载）
   'runtime/electron-helper/shared-core.js', // 桌面模式共享纯逻辑（src/shared 构建产物，window.PetShared）
   'runtime/electron-helper/index.html', // 桌面模式页面壳
 ];

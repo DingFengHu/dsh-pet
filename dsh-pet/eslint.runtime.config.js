@@ -74,6 +74,7 @@ const scriptGlobals = {
   WORK_AREAS: 'readonly',
   PANELS: 'readonly',
   PRIMARY_AREA: 'readonly',
+  LAST_GEO: 'readonly',
   applyDeskGeometry: 'readonly',
   BASE: 'readonly',
   ORIGIN: 'readonly',

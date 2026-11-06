@@ -13,6 +13,10 @@ const params = new URLSearchParams(location.search);
 const CONFIG = {
   configUrl: params.get('configUrl') || 'http://127.0.0.1:3080/dsh-pet-7340/config',
   scale: Number(params.get('scale') || '1'),
+  // 启动时的基准缩放（主屏补偿后）；逐屏适配在它上面乘屏幕系数，CONFIG.scale 是当前生效值
+  baseScale: Number(params.get('scale') || '1'),
+  // 逐屏尺寸适配的参考屏短边（物理像素；0 = 关闭），见 screen-fit.js
+  refScreenPx: Number(params.get('refScreenPx') || '0'),
   petIndex: Number(params.get('petIndex') || '0'),
   topInsetRatio: Number(params.get('topInsetRatio') || '0'),
   // 窗口是否被系统钳在工作区内：X11 的窗口管理器如此（Windows / macOS 允许窗口探出屏幕），
@@ -58,12 +62,16 @@ let WORK_AREAS = [];
 let PANELS = [];
 /** 主屏工作区（视口相对坐标）：角落定位与「回到初始位置」用它——外接矩形的角落可能落在空洞里 */
 let PRIMARY_AREA = null;
+/** 最近一次导入的原始桌面几何（物理像素，主进程下发原样） */
+let LAST_GEO = null;
 
 /** 把主进程下发的桌面几何（{hull, areas, panels, primaryIndex}，屏幕坐标）挂到 VIEW / AREAS / PANELS。 */
 function applyDeskGeometry(geo) {
   const hull = geo && geo.hull;
   const list = geo && Array.isArray(geo.areas) ? geo.areas.filter((a) => a && a.width > 0 && a.height > 0) : [];
   if (!hull || !(hull.width > 0) || !(hull.height > 0) || list.length === 0) return false;
+  // 原始物理几何留底：逐屏尺寸适配改 CONFIG.scale 后要按新比例重新导入（见 sprite/screen-fit.js）
+  LAST_GEO = geo;
   // 主进程几何是物理像素：逐个 ÷scale 进 CSS 系（几何导入的唯一收口）
   VIEW.x = toLocal(hull.x);
   VIEW.y = toLocal(hull.y);

@@ -11,6 +11,7 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { readFileSync, writeFileSync } = require('node:fs');
 const { shouldLinearize, resolveForcedScale, resolvePetScale } = require('../dpi-linearization.js');
+const { resolveRefScreenPx } = require('../screen-fit.js');
 
 /**
  * 造 DPI/指针能力。
@@ -149,6 +150,10 @@ function createDpi({ app, screen, mainPath, linuxPointer, dpiProbe, dpiMark, for
     },
     get forcedScale() {
       return FORCED_SCALE;
+    },
+    /** 逐屏尺寸适配的参考屏短边（物理像素；0 = 不适配）。见 screen-fit.js。 */
+    get refScreenPx() {
+      return resolveRefScreenPx({ forcedScale: FORCED_SCALE, envValue: process.env.DSH_PET_REF_SCREEN_PX });
     },
   };
 }
