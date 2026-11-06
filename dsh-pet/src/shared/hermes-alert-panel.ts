@@ -36,7 +36,7 @@ export const HERMES_ALERT_CSS = [
   '.dsh-pet-hermes{max-height:16em;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:auto;',
   'display:flex;flex-direction:column;gap:calc(var(--f)*0.2);line-height:1.45}',
   '.dsh-pet-hermes-title{font-weight:400;font-size:calc(var(--f)*0.88);color:#24305e}',
-  '.dsh-pet-hermes-msg{font-size:calc(var(--f)*0.7);color:#b5523b;white-space:pre-wrap;overflow-wrap:anywhere;max-height:calc(var(--f)*9);overflow-y:auto}',
+  '.dsh-pet-hermes-msg{font-size:calc(var(--f)*0.7);color:#2c3f86;white-space:pre-wrap;overflow-wrap:anywhere;max-height:calc(var(--f)*9);overflow-y:auto}',
   '.dsh-pet-hermes-status{font-size:calc(var(--f)*0.62);color:#b5523b}',
   // 状态行是 aria-live 区，不能 display:none；空的时候只抵消 flex 间距。
   '.dsh-pet-hermes-status:empty{margin-top:calc(var(--f)*-0.2)}',

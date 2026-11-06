@@ -23,6 +23,6 @@ test('提醒样式不覆盖字体族，也不使用假粗体', () => {
 });
 
 test('正文用橙色，不再显示「可能已过时」提示', () => {
-  assert.match(HERMES_ALERT_CSS, /\.dsh-pet-hermes-msg\{[^}]*color:#b5523b/);
+  assert.match(HERMES_ALERT_CSS, /\.dsh-pet-hermes-msg\{[^}]*color:#2c3f86/);
   assert.doesNotMatch(readFileSync(new URL('./hermes-alert-panel.ts', import.meta.url), 'utf8'), /可能已过时/);
 });
