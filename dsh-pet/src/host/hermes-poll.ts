@@ -18,6 +18,8 @@ export const hermesConfigSchema = z
     python: z.string().min(1).max(4096).refine(isAbsolute),
     hermesRoot: z.string().min(1).max(4096).refine(isAbsolute),
     home: z.string().min(1).max(4096).refine(isAbsolute).optional(),
+    /** Hermes·虎妞桥接运行目录，只读其来信账本 id。 */
+    huniuBridge: z.string().min(1).max(4096).refine(isAbsolute).optional(),
   })
   .strict();
 /** 本地配置文件名，不经公共 config API 暴露路径。 */
@@ -45,6 +47,7 @@ export function hermesArgs(config: z.infer<typeof hermesConfigSchema>): string[]
     '--hermes-root',
     config.hermesRoot,
     ...(config.home ? ['--home', config.home] : []),
+    ...(config.huniuBridge ? ['--huniu-dir', config.huniuBridge] : []),
   ];
 }
 

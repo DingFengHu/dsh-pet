@@ -11,7 +11,7 @@ const storedId = z
   .max(256)
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/);
 /** 本地提醒标识只接受完整哈希。 */
-export const alertId = z.string().regex(/^hermes-(decision|cron)-[a-f0-9]{64}$/);
+export const alertId = z.string().regex(/^hermes-(decision|cron|huniu)-[a-f0-9]{64}$/);
 /** 跨进程快照只保留提醒所需投影，数组均有上限。 */
 export const snapshotSchema = z.object({
   profiles: z.array(z.object({ name: profile, available: z.boolean(), baseUrl: text.optional() })).max(32),
@@ -36,19 +36,30 @@ export const snapshotSchema = z.object({
     )
     .max(512),
   incomplete: z.boolean(),
+  /** 虎妞桥接只给来信 id 与时间，不含正文；缺省表示未配置。 */
+  huniu: z
+    .object({
+      available: z.boolean(),
+      sessionId: text.nullish(),
+      messages: z.array(z.object({ id: text.min(1), created: z.number() })).max(64),
+    })
+    .optional(),
   issues: z
     .array(z.object({ profile: text, stage: text, code: text }))
     .max(128)
     .default([]),
 });
+/** 虎妞来信固定文案，不搬运正文。 */
+export const HUNIU_TITLE = '虎妞发来消息';
+export const HUNIU_MESSAGE = '虎妞有一条新消息，请查看「虎妞协作」对话。';
 /** Host 内部持久化提醒，比共享 UI 契约多带 profile 与 kind。 */
 export const pendingSchema = z
   .object({
     id: alertId,
     profile,
-    kind: z.enum(['decision', 'cron']),
-    title: z.enum(['Hermes 需要你确认', 'Hermes 定时任务失败']),
-    message: z.enum(['有一项请求等待处理，请查看对话。', '有一次定时任务执行失败，请查看 Hermes。']),
+    kind: z.enum(['decision', 'cron', 'huniu']),
+    title: z.enum(['Hermes 需要你确认', 'Hermes 定时任务失败', HUNIU_TITLE]),
+    message: z.enum(['有一项请求等待处理，请查看对话。', '有一次定时任务执行失败，请查看 Hermes。', HUNIU_MESSAGE]),
     sessionId: storedId.optional(),
   })
   .strict();
@@ -59,6 +70,8 @@ export const diskSchema = z
     dismissed: z.array(alertId).max(2048),
     pending: z.array(pendingSchema).max(512),
     baselineProfiles: z.array(profile).max(32),
+    /** 首次读到虎妞账本时把既有来信记为已读，不批量弹旧消息。 */
+    huniuBaseline: z.boolean().optional(),
   })
   .strict();
 /** Host 持久化状态。 */
@@ -67,13 +80,15 @@ export type HermesDisk = z.infer<typeof diskSchema>;
 export type HermesSnapshot = z.infer<typeof snapshotSchema>;
 
 /** 构造无分隔歧义的稳定标识。 */
-export function makeAlertId(kind: 'decision' | 'cron', parts: readonly string[]): string {
+export function makeAlertId(kind: 'decision' | 'cron' | 'huniu', parts: readonly string[]): string {
   return `hermes-${kind}-${createHash('sha256').update(JSON.stringify(parts)).digest('hex')}`;
 }
 
 function validSession(value: string | null | undefined): string | undefined {
   return typeof value === 'string' && storedId.safeParse(value).success ? value : undefined;
 }
+
+const KIND_ORDER = { decision: 0, huniu: 1, cron: 2 } as const;
 
 /** 把完整 profile 的决策替换，部分 profile 保留旧行，cron 失败只经本地确认消失。 */
 export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): HermesDisk {
@@ -162,6 +177,28 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
       });
     }
   }
+  const huniu = snapshot.huniu;
+  let huniuBaseline = previous.huniuBaseline === true;
+  if (huniu?.available) {
+    const sessionId = validSession(huniu.sessionId);
+    for (const message of huniu.messages) {
+      const id = makeAlertId('huniu', [message.id]);
+      if (!huniuBaseline) {
+        dismissed.add(id);
+        continue;
+      }
+      if (dismissed.has(id) || pending.has(id)) continue;
+      pending.set(id, {
+        id,
+        profile: 'default',
+        kind: 'huniu',
+        title: HUNIU_TITLE,
+        message: HUNIU_MESSAGE,
+        ...(sessionId ? { sessionId } : {}),
+      });
+    }
+    huniuBaseline = true;
+  }
   if (dismissed.size > 2048 || pending.size > 512) throw new Error('state-capacity-exceeded');
   for (const entry of snapshot.profiles) {
     if (complete(entry.name, ['profiles', 'discovery', 'gateway', 'jobs'])) baselineProfiles.add(entry.name);
@@ -170,9 +207,10 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
     stateVersion: 1,
     dismissed: [...dismissed],
     pending: [...pending.values()].sort(
-      (left, right) => Number(left.kind === 'cron') - Number(right.kind === 'cron') || left.id.localeCompare(right.id),
+      (left, right) => KIND_ORDER[left.kind] - KIND_ORDER[right.kind] || left.id.localeCompare(right.id),
     ),
     baselineProfiles: [...baselineProfiles],
+    ...(huniuBaseline ? { huniuBaseline } : {}),
   });
 }
 

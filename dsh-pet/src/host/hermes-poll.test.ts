@@ -28,6 +28,14 @@ test('仅固定只读脚本和路径参数，不提供命令、shell、approval 
   assert.deepEqual(args.slice(1), ['--hermes-root', config.hermesRoot]);
   const home = resolve('profile home');
   assert.deepEqual(hermesArgs({ ...config, home }).slice(1), ['--hermes-root', config.hermesRoot, '--home', home]);
+  const huniuBridge = resolve('huniu bridge');
+  assert.deepEqual(hermesArgs({ ...config, huniuBridge }).slice(1), [
+    '--hermes-root',
+    config.hermesRoot,
+    '--huniu-dir',
+    huniuBridge,
+  ]);
+  assert.equal(hermesConfigSchema.safeParse({ ...config, huniuBridge: 'relative' }).success, false);
   assert.deepEqual(HERMES_PROCESS_OPTIONS, {
     shell: false,
     timeout: 50_000,

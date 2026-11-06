@@ -1,7 +1,16 @@
 /** Hermes helper 契约、安全深链及不可猜测的 cron 运行映射回归。 */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { alertView, foldSnapshot, makeAlertId, snapshotSchema, type HermesDisk } from './hermes-policy.ts';
+import {
+  alertView,
+  diskSchema,
+  foldSnapshot,
+  HUNIU_MESSAGE,
+  HUNIU_TITLE,
+  makeAlertId,
+  snapshotSchema,
+  type HermesDisk,
+} from './hermes-policy.ts';
 
 const disk = (): HermesDisk => ({ stateVersion: 1, dismissed: [], pending: [], baselineProfiles: ['default'] });
 const snapshot = (extra: Record<string, unknown> = {}) =>
@@ -137,4 +146,61 @@ test('首次基线 tombstone 达到上限时 fail closed，不截断旧 tombston
   };
   assert.throws(() => foldSnapshot(previous, snapshot({ jobs: [job] })));
   assert.equal(previous.dismissed.length, 2048);
+});
+
+const huniu = (ids: readonly string[], extra: Record<string, unknown> = {}) => ({
+  huniu: {
+    available: true,
+    sessionId: 'local-huniu-home',
+    messages: ids.map((id, index) => ({ id, created: 1_000 + index })),
+    ...extra,
+  },
+});
+
+test('虎妞来信：首次只建基线不弹旧信，之后每条新信一条提醒并深链到虎妞协作', () => {
+  const first = foldSnapshot(disk(), snapshot(huniu(['old-1', 'old-2'])));
+  assert.equal(first.pending.length, 0);
+  assert.equal(first.huniuBaseline, true);
+  assert.ok(first.dismissed.includes(makeAlertId('huniu', ['old-1'])));
+  const second = foldSnapshot(first, snapshot(huniu(['new-1', 'old-1', 'old-2'])));
+  assert.equal(second.pending.length, 1);
+  const view = alertView(second.pending[0]!);
+  assert.deepEqual(view, {
+    id: makeAlertId('huniu', ['new-1']),
+    title: HUNIU_TITLE,
+    message: HUNIU_MESSAGE,
+    url: 'hermes://open/local-huniu-home',
+  });
+  // 持久化往返仍合法，旧版无 huniuBaseline 的状态文件也合法。
+  assert.deepEqual(diskSchema.parse(JSON.parse(JSON.stringify(second))), second);
+  assert.equal(diskSchema.safeParse(disk()).success, true);
+});
+
+test('虎妞账本不可读时保留未确认来信，不建基线；确认后的来信不复现', () => {
+  const base = foldSnapshot(disk(), snapshot(huniu([])));
+  const withNew = foldSnapshot(base, snapshot(huniu(['n1'])));
+  const offline = foldSnapshot(withNew, snapshot(huniu([], { available: false })));
+  assert.equal(offline.pending.length, 1);
+  const unconfigured = foldSnapshot(disk(), snapshot());
+  assert.equal(unconfigured.huniuBaseline, undefined);
+  const acked = { ...withNew, dismissed: [...withNew.dismissed, withNew.pending[0]!.id], pending: [] };
+  assert.equal(foldSnapshot(acked, snapshot(huniu(['n1']))).pending.length, 0);
+});
+
+test('虎妞来信排在待确认请求之后、定时任务失败之前；非法会话 ID 不给深链', () => {
+  const base = foldSnapshot(disk(), snapshot(huniu([])));
+  const next = foldSnapshot(
+    base,
+    snapshot({
+      ...huniu(['m1'], { sessionId: '../x' }),
+      jobs: [job],
+      runs,
+      decisions: [{ profile: 'default', sessionId: 'session-1', requestId: 'r1', method: 'approval' }],
+    }),
+  );
+  assert.deepEqual(
+    next.pending.map((entry) => entry.kind),
+    ['decision', 'huniu', 'cron'],
+  );
+  assert.equal(alertView(next.pending[1]!).url, undefined);
 });

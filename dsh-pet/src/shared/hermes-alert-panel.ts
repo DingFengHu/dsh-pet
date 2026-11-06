@@ -17,9 +17,9 @@ function acknowledge(baseUrl: string, id: string): Promise<boolean> {
   return request;
 }
 
-/** 标题已带 Hermes 时不再重复加前缀，避免出现「Hermes · Hermes 需要你确认」。 */
+/** 标题已带来源（Hermes 或虎妞）时不再加前缀，避免出现「Hermes · Hermes 需要你确认」。 */
 export function hermesTitle(title: string): string {
-  return /^hermes(?![a-z])/i.test(title.trim()) ? title : `Hermes · ${title}`;
+  return /^(hermes(?![a-z])|虎妞)/i.test(title.trim()) ? title : `Hermes · ${title}`;
 }
 
 /** 女仆风提醒气泡：奶油底、蓝色蕾丝虚线边、胶囊按钮，配大肥鱼的蓝白女仆装。
