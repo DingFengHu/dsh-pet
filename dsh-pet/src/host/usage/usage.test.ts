@@ -50,6 +50,14 @@ test('Claude get_usage：深搜 five_hour / seven_day，ISO 与毫秒重置时�
   assert.equal(r.fiveHour?.resetsAt, Date.parse('2026-11-06T00:00:00Z') / 1000);
   assert.equal(r.weekly?.resetsAt, 1794524400);
   assert.throws(() => summarizeClaudeUsage({ rate_limits: null }), /没有返回套餐额度/);
+  assert.throws(
+    () => summarizeClaudeUsage({ subscription_type: null, rate_limits_available: false, rate_limits: null }),
+    /未登录.*claude auth login/,
+  );
+  assert.throws(
+    () => summarizeClaudeUsage({ subscription_type: 'max', rate_limits_available: false, rate_limits: null }),
+    /没有套餐额度数据/,
+  );
   const hist = summarizeClaudeHistory({
     samples: [
       { t: 1, u: { fh: 50, sd: 20 } },

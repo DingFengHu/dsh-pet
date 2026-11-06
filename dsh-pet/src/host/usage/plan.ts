@@ -212,12 +212,20 @@ async function findClaudeCli(override: string | null): Promise<string> {
 
 /**
  * Claude get_usage 应答 → 快照；对结构变化宽容（按 five_hour / seven_day 键名深搜）。
+ * rate_limits_available 为 false 说明 CLI 没有登录订阅账号（凭据失效或被清空），直接报未登录。
  *
  * @param response - get_usage 的 response。
  * @param now - 当前时间。
  * @returns 快照。
  */
 export function summarizeClaudeUsage(response: unknown, now = Date.now()): PlanUsage {
+  const body = obj(response);
+  if (body.rate_limits_available === false)
+    throw new Error(
+      body.subscription_type
+        ? 'Claude 账号没有套餐额度数据。'
+        : 'Claude CLI 未登录，在终端运行 claude auth login 重新登录。',
+    );
   const found: Record<string, Loose> = {};
   const visit = (value: unknown, key: string): void => {
     if (!value || typeof value !== 'object') return;
