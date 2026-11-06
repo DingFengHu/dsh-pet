@@ -30,6 +30,8 @@ export interface UsageConfig {
   readonly deepseekItem: string | null;
   /** OpenAI 组织 Admin Key 的 1Password 条目 ID。 */
   readonly openaiAdminItem: string | null;
+  /** Claude 长期 OAuth 令牌（claude setup-token）的 1Password 条目 ID；CLI 读不到额度时兜底。 */
+  readonly claudeOauthItem: string | null;
   /** Claude Console 组织 ID。 */
   readonly claudeConsoleOrg: string | null;
   /** 已登录 OpenAI / Claude Console 的专用 Chrome 的 CDP 地址。 */
@@ -80,6 +82,7 @@ export function parseUsageConfig(raw: unknown): UsageConfig {
     python: str(op.python) ?? 'python',
     deepseekItem: str(items.deepseek),
     openaiAdminItem: str(items.openaiAdmin),
+    claudeOauthItem: str(items.claudeOauth),
     claudeConsoleOrg: str(o.claudeConsoleOrg),
     cdpUrl: str(o.cdpUrl) ?? 'http://127.0.0.1:9222',
     codexCli: str(o.codexCli),
