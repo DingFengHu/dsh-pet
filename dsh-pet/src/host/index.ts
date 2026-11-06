@@ -101,6 +101,9 @@ export function apply(ctx: any): void {
     getHandlePetRoute: () => httpRoute.handlePetRoute,
   });
   const { startHelper, stopHelper, markDisposed } = desktopHelper;
+  // AI 用量面板：打开时页面轮询；关着时后台预热不开浏览器标签的来源，点开即是新数
+  const usage = createUsageService(userRoot);
+  const stopUsageWarm = usage.startBackground();
 
   const deps: PetRouteDeps = {
     ...setup,
@@ -111,8 +114,7 @@ export function apply(ctx: any): void {
     ctx,
     todos,
     hermesAlerts,
-    // AI 用量面板：只在面板打开时被轮询驱动
-    usage: createUsageService(userRoot),
+    usage,
     // 语音合成：缓存落 userRoot，失败只留日志，不打断宿主
     voice: createVoiceService({ userRoot, log }),
   };
@@ -154,7 +156,10 @@ export function apply(ctx: any): void {
     markDisposed,
     playback,
     state,
-    stopDownloadSlotTimer,
+    stopDownloadSlotTimer: () => {
+      stopDownloadSlotTimer();
+      stopUsageWarm();
+    },
     stopHelper,
     stopWorkStatusFlush,
   });

@@ -18,6 +18,7 @@ import { parseUsageConfig } from './config.ts';
 import { summarizeClaudeHistory, summarizeClaudeUsage, summarizeCodex } from './plan.ts';
 import { createLazySecret } from './secrets.ts';
 import { createSource } from './source.ts';
+import { createUsageServiceFrom, type UsageSources } from './index.ts';
 
 test('Codex rateLimits：按窗口时长识别 5 小时与周窗口', () => {
   const r = summarizeCodex(
@@ -260,4 +261,25 @@ test('面板摆放：贴在鱼身右侧不重叠，放不下换左侧，尾巴�
   assert.ok(low.tailY > 70 && low.tailY <= 440 - 40, '面板被上推后尾巴下移');
   const zoomed = placePanel(body, area, { width: 546, height: 770 }, 1.75);
   assert.equal(zoomed.x, Math.round(600 + 2 * 1.75));
+});
+
+test('后台预热：只刷新不开浏览器标签的来源，面板关着也能保持套餐与余额新鲜', async () => {
+  const calls: string[] = [];
+  const src = <T>(name: string, value: T) =>
+    createSource(async () => (calls.push(name), value), { refreshMs: 1000, retryMs: 1000, minForceMs: 0 });
+  const sources = {
+    codex: src('codex', {}),
+    claude: src('claude', {}),
+    codexApi: src('codexApi', {}),
+    claudeApi: src('claudeApi', {}),
+    deepseek: src('deepseek', {}),
+  } as unknown as UsageSources;
+  const service = createUsageServiceFrom(async () => sources);
+  await service.warm();
+  assert.deepEqual(calls.sort(), ['claude', 'codex', 'deepseek']);
+  const snap = await service.snapshot(false, 50);
+  assert.ok(snap.codex.okAt !== null && snap.deepseek.okAt !== null);
+  assert.deepEqual(calls.sort(), ['claude', 'claudeApi', 'codex', 'codexApi', 'deepseek']);
+  const stop = service.startBackground(60000, 60000);
+  stop();
 });
