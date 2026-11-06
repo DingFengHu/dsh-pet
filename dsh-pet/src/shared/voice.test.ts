@@ -338,12 +338,12 @@ describe('speakAlert —— 推送气泡跟「语音播报」总开关走', () =
     try {
       setSurface('desktop');
       setVoiceConfig('', true);
-      speakAlert('主人，虎妞说：晚饭好了');
+      speakAlert('虎哥，虎妞说：晚饭好了');
       await flush();
-      assert.deepEqual(fetchStub.calls, [{ text: '主人，虎妞说：晚饭好了' }]);
+      assert.deepEqual(fetchStub.calls, [{ text: '虎哥，虎妞说：晚饭好了' }]);
       setVoiceEnabled(false);
       assert.equal(isVoiceEnabled(), false);
-      speakAlert('主人，Hermes 需要你确认');
+      speakAlert('虎哥，Hermes 需要你确认');
       await flush();
       assert.equal(fetchStub.calls.length, 1, '关掉朗读后推送只弹气泡');
       setVoiceEnabled(true);
@@ -360,7 +360,7 @@ describe('speakAlert —— 推送气泡跟「语音播报」总开关走', () =
     try {
       setSurface('web');
       setVoiceConfig('', true);
-      speakAlert('主人，Windows 计划任务失败 · memwatch');
+      speakAlert('虎哥，Windows 计划任务失败 · memwatch');
       await flush();
       assert.equal(fetchStub.calls.length, 0);
     } finally {
