@@ -6,6 +6,7 @@ import { HERMES_ALERT_CSS, hermesTitle } from './hermes-alert-panel.ts';
 test('标题已以 Hermes 开头时不重复前缀', () => {
   assert.equal(hermesTitle('Hermes 需要你确认'), 'Hermes 需要你确认');
   assert.equal(hermesTitle('Hermes 定时任务失败'), 'Hermes 定时任务失败');
+  assert.equal(hermesTitle('虎妞发来消息'), '虎妞发来消息');
 });
 
 test('标题不含 Hermes 时补上来源前缀', () => {
