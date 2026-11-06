@@ -151,7 +151,10 @@ async function boot(): Promise<void> {
     installDesktopAuth(
       session.defaultSession,
       origin,
-      join(packageRoot, 'runtime/electron-helper/index.html'),
+      [
+        join(packageRoot, 'runtime/electron-helper/index.html'),
+        join(packageRoot, 'runtime/electron-helper/usage.html'),
+      ],
       security.token,
     );
   });

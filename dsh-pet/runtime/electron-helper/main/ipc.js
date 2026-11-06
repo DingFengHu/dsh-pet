@@ -17,8 +17,9 @@ const { safeHermesUrl } = require('../hermes-url.js');
  * @param deps.shell - Electron shell（打开站点）。
  * @param deps.openTarget - 菜单首项的去向：desktop 唤起桌面应用；其余形态交给默认浏览器打开已鉴权地址。
  * @param deps.petRoute - 宠物路由前缀。
+ * @param deps.usageWindow - AI 用量面板（可选）。
  */
-function registerIpc({ ipcMain, petWindows, shell, openTarget, petRoute }) {
+function registerIpc({ ipcMain, petWindows, shell, openTarget, petRoute, usageWindow }) {
   // 宠物窗口跟随：renderer 逐帧上报窗口内容区位置/尺寸
   ipcMain.on('pet:set-bounds', (event, bounds) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -207,6 +208,13 @@ function registerIpc({ ipcMain, petWindows, shell, openTarget, petRoute }) {
     shell.openExternal(target).catch(() => {
       console.warn('[dsh-pet-desktop-helper] 无法打开 Hermes 对话');
     });
+  });
+
+  // Shift+左键点宠物：开关 AI 用量面板。只认宠物窗口发来的请求。
+  ipcMain.on('pet:toggle-usage', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!usageWindow || !win || win.isDestroyed() || ![...petWindows.state.windows.values()].includes(win)) return;
+    usageWindow.toggle();
   });
 
   // 只叫窗口、不改去向：被别的窗口挡住时把主窗口提到前台。

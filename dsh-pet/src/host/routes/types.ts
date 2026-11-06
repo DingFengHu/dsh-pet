@@ -53,6 +53,8 @@ export type RouteHandler = (deps: PetRouteDeps, input: RouteInput) => Promise<Ro
  * 唯一有副作用的是 `nextExternalWorkSeq`：它推进外部写入序号并返回新值。
  */
 export interface PetRouteDeps {
+  /** 可选 AI 用量服务（Shift+点击弹出的用量面板）。 */
+  readonly usage?: import('../usage/index.ts').UsageService;
   /** 可选只读 Hermes 提醒的本地确认能力。 */
   readonly hermesAlerts?: import('../hermes-alerts.ts').HermesAlerts;
   /** 配置路径集（内置默认 + 用户主配置 + 文件宠物目录）。 */

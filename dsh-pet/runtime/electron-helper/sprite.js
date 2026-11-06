@@ -13,6 +13,8 @@
 const OPEN_SHORTCUT_HINT = /Mac/i.test(navigator.platform || navigator.userAgent) ? 'Cmd+左键' : 'Ctrl+左键';
 /** 本次点击是否按住了「呼出 DSH」的修饰键（Ctrl / Cmd） */
 const isOpenShortcut = (e) => !!(e && (e.ctrlKey || e.metaKey));
+// Shift+左键 = 开关 AI 用量面板（与呼出 DSH 互斥：同时按 Ctrl/Cmd 时按呼出处理）。
+const isUsageShortcut = (e) => !!(e && e.shiftKey && !e.ctrlKey && !e.metaKey);
 
 // 点击音效：与浏览器端同一套参数（单例 audio、音量 0.5、100ms 节流、失败静默）。
 // 复用素材通道：bridge 模式由主进程取回音频，普通模式仍走 HTTP。

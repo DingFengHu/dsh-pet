@@ -37,11 +37,18 @@ export interface DesktopSession {
  *
  * @param session - 主进程默认 session（出站请求拦截）。
  * @param origin - 本机服务 origin。
- * @param rendererPath - 桌面 Helper 渲染页绝对路径。
+ * @param rendererPaths - 桌面 Helper 渲染页绝对路径（宠物页、用量面板页）；只有这些页面拿得到令牌。
  * @param token - 访问令牌。
  */
-export function installDesktopAuth(session: DesktopSession, origin: string, rendererPath: string, token: string): void {
-  const renderer = pathToFileURL(rendererPath).href;
+export function installDesktopAuth(
+  session: DesktopSession,
+  origin: string,
+  rendererPaths: string | readonly string[],
+  token: string,
+): void {
+  const renderers = new Set(
+    (typeof rendererPaths === 'string' ? [rendererPaths] : rendererPaths).map((p) => pathToFileURL(p).href),
+  );
   session.webRequest.onBeforeSendHeaders((details, callback) => {
     const headers = { ...details.requestHeaders };
     // 重定向后的请求不得把凭证带去别的目标。
@@ -58,7 +65,7 @@ export function installDesktopAuth(session: DesktopSession, origin: string, rend
         frame?.parent === null &&
         page?.protocol === 'file:' &&
         page.origin === 'null' &&
-        page.href.split(/[?#]/, 1)[0] === renderer
+        renderers.has(page.href.split(/[?#]/, 1)[0])
       ) {
         headers['X-DSH-Pet-Token'] = token;
       }

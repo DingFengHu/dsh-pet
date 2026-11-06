@@ -42,7 +42,7 @@ Object.assign(PetSprite.prototype, {
     // pressScoreFired 标记本次按下已触发，松开的 click 据此不再重复弹、也不再播普通点击动画。
     this.pressScoreFired = false;
     // 修饰键+点击是「呼出 DSH」快捷键：不弹积分，避免快捷键顺手刷分
-    if (grabState && !isOpenShortcut(e)) {
+    if (grabState && !isOpenShortcut(e) && !isUsageShortcut(e)) {
       const grabSpeed = Math.hypot(grabState.vx, grabState.vy);
       if (grabSpeed >= S.SCORE_MIN_SPEED) {
         this.pressScoreFired = true;
@@ -351,6 +351,14 @@ Object.assign(PetSprite.prototype, {
       this.stopThrow();
       this.stopMove();
       if (window.petBridge) window.petBridge.openDshSite(ORIGIN);
+      return;
+    }
+    // Shift+左键 = 开关 AI 用量面板：同样不播点击动画、不计分。
+    if (isUsageShortcut(e)) {
+      this.stopThrow();
+      this.stopMove();
+      if (window.petBridge && typeof window.petBridge.toggleUsagePanel === 'function')
+        window.petBridge.toggleUsagePanel();
       return;
     }
     // 积分判定已在 onPointerDown（按下即触发）完成：已触发过就只收手停住，不再播普通点击动画
