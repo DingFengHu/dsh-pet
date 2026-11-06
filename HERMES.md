@@ -59,3 +59,26 @@
 - 隧道：OpenAI Platform 隧道 `dsh-pet-huniu-inbox`，运行密钥仅 Tunnels Read+Use、30 天有效，存 `$DSH_HOME/dsh-pet/tunnel/tunnel.key`（ACL 同上）。`D:\App\dsh-pet-tunnel` 放独立的 tunnel-client 0.0.19 与 `scripts/huniu-inbox-tunnel.py`；隐藏计划任务 `DSH Pet Huniu Tunnel`（pythonw，登录后 1 分钟，之后每 30 分钟重跑，`runtimes connect` 复用已有别名 `dsh-pet-huniu`）。公开状态写 `tunnel/runtime-status.json`。
 - ChatGPT 私有插件：隧道连接、无需身份验证（外层是账户隧道授权，内层仍校验本机 Bearer），权限保持默认「允许使用低风险工具」。
 - 回滚：停用并删除计划任务，`tunnel-client runtimes stop dsh-pet-huniu`，在 ChatGPT 删除插件，Platform 撤销密钥与隧道；删 `huniu-inbox.key` 后大肥鱼不再监听。
+
+## Claude 与 Windows 计划任务提醒（0.4.3-dfh.10 起）
+
+和 Hermes、虎妞提醒共用同一个气泡面板与本地“知道了”，只显示，不回复、不批准、不重跑任何东西。
+
+**收件目录**：`~/.dsh/dsh-pet/inbox/*.json`，一个事件一个文件（生产者 tmp + rename 原子写入），大肥鱼每 3 秒读一轮，按事件时间顺序写入提醒状态，成功后删文件（某个失败则它和之后的留到下轮）；格式不对的文件直接删。外部提醒去重由生产者负责，点“知道了”不写进永久 dismissed 列表。等决定的事件超过 12 小时、失败事件超过 3 天视为过期丢弃。事件契约见 `src/host/pet-inbox.ts` 的 `inboxEventSchema`。
+
+**Claude（生产者 `scripts/claude-pet-notify.mjs`）**：作为 Claude Code 全局 async hook 部署到 `~/.claude/hooks/pet-notify.mjs`，挂在 `~/.claude/settings.json`：
+
+| hook 事件 | 条件 | 气泡 |
+|---|---|---|
+| PreToolUse `AskUserQuestion` | 总是 | Claude 要你做决定 + 问题原文 |
+| PreToolUse `mcp__ccd_turn__wrap_up` | 带 `ask` | Claude 等你回复 + ask 与 recap |
+| Notification `permission_prompt` | 总是 | Claude 等你批准 |
+| StopFailure | 定时任务会话 | Claude 定时任务失败 + 错误类型 |
+| Stop | 定时任务会话且最终回复含 `[TASK-FAILED] 原因` | Claude 定时任务失败 + 原因 |
+| UserPromptSubmit / PostToolUse `AskUserQuestion` | 该会话有未读决定 | 清掉该会话在此之前的决定提醒 |
+
+定时任务会话按 transcript 首条用户消息 `<scheduled-task name="…">` 识别；`[TASK-FAILED]` 必须独占一行开头，约定写在 `~/.claude/CLAUDE.md`。hook 任何异常都静默 exit 0。等你批准权限的提醒没有可靠的“已批准”信号，要等该会话下一条消息或手动点掉。
+
+**Windows 计划任务（`src/host/windows-tasks.ts`）**：每 5 分钟用隐藏的 PowerShell 只读查询根文件夹计划任务的上次结果。首轮只记基线；任务从正常变成失败时提醒一次，持续失败不重复，成功一次后再失败才再提醒。运行中、已禁用、从未运行、被用户终止不算失败；默认排除 `ClaudeOutside-*`、OneDrive/NVIDIA/Zoom/Google/Edge 自更新任务。可选配置 `~/.dsh/dsh-pet/windows-task-watch.jsonc`：`{ "enabled": false }` 关闭，`"exclude": ["^某任务$"]` 追加排除（正则，不分大小写）。状态在 `windows-task-watch-state.json`。
+
+**回滚**：从 `~/.claude/settings.json` 删掉 6 条 `pet-notify.mjs` hook（安装前备份在仓库 ignored `output/claude-hook-install/`），删除 `~/.claude/hooks/pet-notify.mjs`；Windows 巡检写 `{ "enabled": false }`。大肥鱼本体回滚到 dfh.9 前，必须先停新版、从 `hermes-alerts-state.json` 删掉 `kind` 为 `claude`/`claude-fail`/`win-fail` 的 pending 条目（或恢复部署前的备份），否则旧版严格校验读不了状态文件，所有 Hermes/虎妞提醒都会停。
