@@ -25,12 +25,6 @@
 }
 ```
 
-可选 `"huniuBridge": "<Hermes·虎妞桥接运行目录绝对路径>"`（0.4.3-dfh.8 起）：虎妞经 Hermes 桥接发来的每条消息都在大肥鱼头上弹一条「虎妞发来消息」提醒，**查看对话**打开 `home-session.json` 记录的 Hermes「虎妞协作」会话。
-
-- 只以 `mode=ro` 打开桥接的 `state/bridge.sqlite3`，只取 `direction='huniu'`、非 `cancelled` 消息的 id 与时间（最近 64 条），不读正文、附件、订阅或密钥，也不调用桥接接口。
-- 首次读到账本只建基线，旧消息不弹。账本暂不可读时保留未确认的来信提醒。提醒排在待确认请求之后、定时任务失败之前。
-- 和 Hermes 网关无关：网关离线时虎妞来信照常提醒。每条来信需单独点「知道了」，同样计入 2048 条本地确认上限。
-
 复用现有 Hermes 环境，不另装 Python 依赖，不复制 API key。路径配置为本机私有文件，不提交个人安装路径。运行数据存于同目录的独立确认状态文件。
 
 ## 明确边界
@@ -55,3 +49,13 @@
 ## 回滚
 
 独立 exe：停计划任务，把安装目录换回上一版 `win-unpacked` 备份后再启动；回到 DSH 插件形态则 `dsh plugin --profile desktop add file:<上一版精确 tarball>` 并停用计划任务。DSH 插件形态内：重新安装升级前的精确 dsh-pet tarball，只撤回本次新增的 Hermes 路径配置。确认记录和用户其他宠物配置保留，不整份覆盖旧 profile，不强杀 DSH。
+
+## 虎妞单向转发（0.4.3-dfh.9 起）
+
+虎妞（ChatGPT dots）每次给虎哥回复后，调用专用私有插件「大肥鱼 · 虎妞转发」的唯一工具 `pet_show_message({message_id, text})`，大肥鱼把原文显示在提醒气泡里（标题「虎妞」，按收到顺序，点「知道了」收起）。单向，大肥鱼不回话。0.4.3-dfh.8 读 Hermes 桥接账本的做法是误解需求，已撤销。
+
+- 收件口：`src/host/huniu-inbox.ts`，只听 `127.0.0.1:18781/mcp`，最小 MCP（Streamable HTTP，JSON 响应），精确 Host、拒绝 Origin、Bearer、32 KiB 上限。数据根 `huniu-inbox.key`（64 位 hex，ACL 仅本人/SYSTEM/Administrators）不存在就不监听。
+- 消息与 Hermes 提醒共用状态文件 `hermes-alerts-state.json`（kind `huniu`），同 `message_id` 幂等，确认过的不再出现。超过 4000 字截断并标注；待确认上限 512 条，满了工具返回错误而不丢旧消息。
+- 隧道：OpenAI Platform 隧道 `dsh-pet-huniu-inbox`，运行密钥仅 Tunnels Read+Use、30 天有效，存 `$DSH_HOME/dsh-pet/tunnel/tunnel.key`（ACL 同上）。`D:\App\dsh-pet-tunnel` 放独立的 tunnel-client 0.0.19 与 `scripts/huniu-inbox-tunnel.py`；隐藏计划任务 `DSH Pet Huniu Tunnel`（pythonw，登录后 1 分钟，之后每 30 分钟重跑，`runtimes connect` 复用已有别名 `dsh-pet-huniu`）。公开状态写 `tunnel/runtime-status.json`。
+- ChatGPT 私有插件：隧道连接、无需身份验证（外层是账户隧道授权，内层仍校验本机 Bearer），权限保持默认「允许使用低风险工具」。
+- 回滚：停用并删除计划任务，`tunnel-client runtimes stop dsh-pet-huniu`，在 ChatGPT 删除插件，Platform 撤销密钥与隧道；删 `huniu-inbox.key` 后大肥鱼不再监听。

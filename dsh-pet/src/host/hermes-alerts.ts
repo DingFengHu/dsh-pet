@@ -7,7 +7,17 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { alertId, alertView, diskSchema, foldSnapshot, snapshotSchema, type HermesDisk } from './hermes-policy.ts';
+import {
+  alertId,
+  alertView,
+  diskSchema,
+  foldSnapshot,
+  HUNIU_TITLE,
+  makeAlertId,
+  snapshotSchema,
+  sortPending,
+  type HermesDisk,
+} from './hermes-policy.ts';
 import type { PollStateStore } from './state.ts';
 
 /** 自有状态文件名，未启用且从未存储时不触碰共享状态。 */
@@ -157,6 +167,26 @@ export function createHermesAlerts(options: HermesAlertsOptions) {
           );
           throw new Error('hermes-local-ack-failed', { cause });
         }
+      }),
+    /** 虎妞转发的一条消息：同 ID 幂等，已确认过的不再出现，写盘成功后才发布。 */
+    pushHuniu: (messageId: string, text: string): Promise<'shown' | 'duplicate'> =>
+      run(async () => {
+        if (stopped) throw new Error('stopped');
+        await load();
+        const id = makeAlertId('huniu', [messageId]);
+        if (disk!.dismissed.includes(id) || disk!.pending.some((entry) => entry.id === id)) return 'duplicate';
+        if (disk!.pending.length >= 512) throw new Error('state-capacity-exceeded');
+        await commit(
+          diskSchema.parse({
+            ...disk!,
+            pending: sortPending([
+              ...disk!.pending,
+              { id, profile: 'default', kind: 'huniu', title: HUNIU_TITLE, message: text, at: Date.now() },
+            ]),
+          }),
+        );
+        publish();
+        return 'shown';
       }),
     /** 离线不会清空已发布提醒。 */
     offline: (code = 'hermes-unavailable'): void => fail(code),

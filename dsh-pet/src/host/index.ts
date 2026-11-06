@@ -18,6 +18,7 @@ import { createVoiceService } from './voice/speak.ts';
 import { TODO_FILE_NAME, TodoStore } from './todo/store.ts';
 import { createHermesAlerts, HERMES_STATE_FILE } from './hermes-alerts.ts';
 import { startHermesPolling } from './hermes-poll.ts';
+import { startHuniuInbox } from './huniu-inbox.ts';
 import { createUsageService } from './usage/index.ts';
 import { join } from 'node:path';
 import type { PetRouteDeps } from './routes/types.ts';
@@ -84,6 +85,10 @@ export function apply(ctx: any): void {
     },
   });
   ctx.effect(() => startHermesPolling({ userRoot, alerts: hermesAlerts }), 'dsh-pet: Hermes read-only alerts');
+  ctx.effect(
+    () => startHuniuInbox({ userRoot, alerts: hermesAlerts, log: (line) => log.info?.(line) }),
+    'dsh-pet: 虎妞单向收件口',
+  );
 
   const desktopHelper = createDesktopHelper({
     ctx,

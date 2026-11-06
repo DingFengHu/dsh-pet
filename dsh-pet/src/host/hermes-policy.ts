@@ -36,33 +36,37 @@ export const snapshotSchema = z.object({
     )
     .max(512),
   incomplete: z.boolean(),
-  /** 虎妞桥接只给来信 id 与时间，不含正文；缺省表示未配置。 */
-  huniu: z
-    .object({
-      available: z.boolean(),
-      sessionId: text.nullish(),
-      messages: z.array(z.object({ id: text.min(1), created: z.number() })).max(64),
-    })
-    .optional(),
   issues: z
     .array(z.object({ profile: text, stage: text, code: text }))
     .max(128)
     .default([]),
 });
-/** 虎妞来信固定文案，不搬运正文。 */
-export const HUNIU_TITLE = '虎妞发来消息';
-export const HUNIU_MESSAGE = '虎妞有一条新消息，请查看「虎妞协作」对话。';
-/** Host 内部持久化提醒，比共享 UI 契约多带 profile 与 kind。 */
-export const pendingSchema = z
+/** 虎妞转发消息的气泡标题。 */
+export const HUNIU_TITLE = '虎妞';
+/** 虎妞经专用隧道转发的原文，按收到顺序显示，只能本地确认。 */
+const huniuPendingSchema = z
+  .object({
+    id: alertId,
+    profile: z.literal('default'),
+    kind: z.literal('huniu'),
+    title: z.literal(HUNIU_TITLE),
+    message: z.string().min(1).max(4096),
+    at: z.number().finite(),
+  })
+  .strict();
+/** Hermes 自身提醒只用固定文案。 */
+const hermesPendingSchema = z
   .object({
     id: alertId,
     profile,
-    kind: z.enum(['decision', 'cron', 'huniu']),
-    title: z.enum(['Hermes 需要你确认', 'Hermes 定时任务失败', HUNIU_TITLE]),
-    message: z.enum(['有一项请求等待处理，请查看对话。', '有一次定时任务执行失败，请查看 Hermes。', HUNIU_MESSAGE]),
+    kind: z.enum(['decision', 'cron']),
+    title: z.enum(['Hermes 需要你确认', 'Hermes 定时任务失败']),
+    message: z.enum(['有一项请求等待处理，请查看对话。', '有一次定时任务执行失败，请查看 Hermes。']),
     sessionId: storedId.optional(),
   })
   .strict();
+/** Host 内部持久化提醒，比共享 UI 契约多带 profile 与 kind。 */
+export const pendingSchema = z.union([hermesPendingSchema, huniuPendingSchema]);
 /** 自有状态严格验证，不覆盖损坏文件。 */
 export const diskSchema = z
   .object({
@@ -70,7 +74,7 @@ export const diskSchema = z
     dismissed: z.array(alertId).max(2048),
     pending: z.array(pendingSchema).max(512),
     baselineProfiles: z.array(profile).max(32),
-    /** 首次读到虎妞账本时把既有来信记为已读，不批量弹旧消息。 */
+    /** dfh.8 的旧字段，只为读旧状态文件保留，不再使用。 */
     huniuBaseline: z.boolean().optional(),
   })
   .strict();
@@ -89,6 +93,16 @@ function validSession(value: string | null | undefined): string | undefined {
 }
 
 const KIND_ORDER = { decision: 0, huniu: 1, cron: 2 } as const;
+
+/** 待确认请求在前，虎妞消息按收到顺序居中，定时任务失败最后。 */
+export function sortPending(entries: HermesDisk['pending']): HermesDisk['pending'] {
+  return entries.sort(
+    (left, right) =>
+      KIND_ORDER[left.kind] - KIND_ORDER[right.kind] ||
+      (left.kind === 'huniu' && right.kind === 'huniu' ? left.at - right.at : 0) ||
+      left.id.localeCompare(right.id),
+  );
+}
 
 /** 把完整 profile 的决策替换，部分 profile 保留旧行，cron 失败只经本地确认消失。 */
 export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): HermesDisk {
@@ -177,28 +191,6 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
       });
     }
   }
-  const huniu = snapshot.huniu;
-  let huniuBaseline = previous.huniuBaseline === true;
-  if (huniu?.available) {
-    const sessionId = validSession(huniu.sessionId);
-    for (const message of huniu.messages) {
-      const id = makeAlertId('huniu', [message.id]);
-      if (!huniuBaseline) {
-        dismissed.add(id);
-        continue;
-      }
-      if (dismissed.has(id) || pending.has(id)) continue;
-      pending.set(id, {
-        id,
-        profile: 'default',
-        kind: 'huniu',
-        title: HUNIU_TITLE,
-        message: HUNIU_MESSAGE,
-        ...(sessionId ? { sessionId } : {}),
-      });
-    }
-    huniuBaseline = true;
-  }
   if (dismissed.size > 2048 || pending.size > 512) throw new Error('state-capacity-exceeded');
   for (const entry of snapshot.profiles) {
     if (complete(entry.name, ['profiles', 'discovery', 'gateway', 'jobs'])) baselineProfiles.add(entry.name);
@@ -206,11 +198,8 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
   return diskSchema.parse({
     stateVersion: 1,
     dismissed: [...dismissed],
-    pending: [...pending.values()].sort(
-      (left, right) => KIND_ORDER[left.kind] - KIND_ORDER[right.kind] || left.id.localeCompare(right.id),
-    ),
+    pending: sortPending([...pending.values()]),
     baselineProfiles: [...baselineProfiles],
-    ...(huniuBaseline ? { huniuBaseline } : {}),
   });
 }
 
@@ -221,7 +210,7 @@ export function alertView(entry: HermesDisk['pending'][number]): {
   message: string;
   url?: string;
 } {
-  const sessionId = validSession(entry.sessionId);
+  const sessionId = entry.kind === 'huniu' ? undefined : validSession(entry.sessionId);
   const url = sessionId && entry.profile === 'default' ? `hermes://open/${encodeURIComponent(sessionId)}` : undefined;
   return {
     id: entry.id,
