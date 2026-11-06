@@ -37,10 +37,14 @@
 
 - 源码基线：自有 fork `271d501c948922bf732a9ef9212222032cb503ff`，上游 `e3a2be8`，功能包 0.4.3。
 - 执行包目录的 `npm run build`，包含网页和桌面共享核心。不要手改生成的 `shared-core.js`。
-- 相关源码、Python helper 和测试一并打包/验证。通过 DSH 官方 plugin 安装流程升级，保留上一版精确 tarball 和本机配置备份。
+- **当前运行形态是独立 exe，不依赖 DSH**（0.4.3-dfh.3 起）：`npm run dist` 产出 `dist-app/win-unpacked/`，镜像到 `D:\App\dsh-pet`，由登录计划任务 `DSH Pet Standalone` 启动。升级见 [INSTALL.md](INSTALL.md)「开机自启」。配置与确认记录仍在 `$DSH_HOME/dsh-pet/`，两种形态通用。
+- 独立 exe 用 asar 打包：`scripts/hermes-notification-snapshot.py` 必须同时列在 `electron-builder.yml` 的 `files` 与 `asarUnpack`，`hermes-poll.ts` 的 `unpackedAsarPath` 把路径换成 `app.asar.unpacked`，否则外部 Python 读不到脚本、提醒静默失效。
+- 独立 exe 的渲染页是 `file://`（Origin 为 `null`/`file://`）。“知道了”走 HTTP，宿主的同源守卫只认独立模式请求安全层**令牌已核验**的请求（`host/plugin/local-request.ts` 标记），回环地址与本机 Host 检查不放宽。DSH 内走受信桥接管道，不经过这条。
+- 若改回 DSH 插件形态：通过 DSH 官方 plugin 安装流程升级，保留上一版精确 tarball 和本机配置备份，并停用独立 exe 的计划任务，避免两只同时出现。
+- 相关源码、Python helper 和测试一并打包/验证。
 - 升级不恢复此前移除的碎碎念、聊天、余额、睡觉等功能，不替换 Hermes 安装源码。
 - 实际验收结果与限制由父仓库 CHANGELOG 和本机交付回执记录。自动测试或源码构建不代表线上提醒已生效。
 
 ## 回滚
 
-重新安装升级前的精确 dsh-pet tarball，只撤回本次新增的 Hermes 路径配置。确认记录和用户其他宠物配置保留，不整份覆盖旧 profile，不强杀 DSH。
+独立 exe：停计划任务，把安装目录换回上一版 `win-unpacked` 备份后再启动；回到 DSH 插件形态则 `dsh plugin --profile desktop add file:<上一版精确 tarball>` 并停用计划任务。DSH 插件形态内：重新安装升级前的精确 dsh-pet tarball，只撤回本次新增的 Hermes 路径配置。确认记录和用户其他宠物配置保留，不整份覆盖旧 profile，不强杀 DSH。

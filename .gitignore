@@ -51,3 +51,6 @@ dsh-pet/dist-app/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ── 本地任务临时产物（Projects 工作区约定） ──
+/output/

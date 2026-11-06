@@ -20,6 +20,7 @@ import { configPathsFor } from '../standalone/options.ts';
 import { createRequestSecurity } from '../standalone/request-security.ts';
 
 import { installDesktopAuth, type DesktopSession } from './desktop-auth.ts';
+import { launchMode } from './launch-mode.ts';
 import { startRouter } from './router.ts';
 import { ROUTE_SEGMENT } from '../shared/constants.ts';
 
@@ -53,12 +54,17 @@ const helperMain = join(packageRoot, 'runtime', 'electron-helper', 'main.js');
 
 const log = (message: string): void => console.log(`[dsh-pet-app] ${message}`);
 
-/** 单实例：第二次双击直接退出（共用 userData 的 Chromium profile 会互踢） */
-const locked = app.requestSingleInstanceLock();
-if (!locked) {
-  app.exit(0);
+if (launchMode(process.env) === 'dpi-probe') {
+  // Helper 拉起的 DPI 探测子进程：只跑 Helper 的探测分支，打印主屏缩放后自行退出（见 launch-mode.ts）
+  createRequire(import.meta.url)(helperMain);
 } else {
-  await boot();
+  /** 单实例：第二次双击直接退出（共用 userData 的 Chromium profile 会互踢） */
+  const locked = app.requestSingleInstanceLock();
+  if (!locked) {
+    app.exit(0);
+  } else {
+    await boot();
+  }
 }
 
 /**

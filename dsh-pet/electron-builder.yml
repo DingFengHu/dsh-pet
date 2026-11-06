@@ -31,10 +31,15 @@ files:
   - assets/sound/**
   - assets/config.jsonc
   - assets/logo.png
+  # Hermes 只读提醒脚本：由外部 Python 执行，必须同时出现在下方 asarUnpack
+  - scripts/hermes-notification-snapshot.py
   - package.json
   - '!node_modules/**'
 
 asar: true
+# 外部进程读不了 asar 内文件；hermes-poll.ts 的 unpackedAsarPath 指向这份解包副本
+asarUnpack:
+  - scripts/hermes-notification-snapshot.py
 npmRebuild: false
 
 # 与 package.json 的 @electron/get 默认下载版本保持一致；改版本时两处一起改

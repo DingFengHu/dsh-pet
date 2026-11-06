@@ -30,10 +30,18 @@ export const HERMES_PROCESS_OPTIONS = {
   windowsHide: true,
 } as const;
 
+/**
+ * 独立 exe 里包根落在 `resources/app.asar`，外部 Python 读不到 asar 内文件；
+ * electron-builder 的 asarUnpack 把脚本放在同级 `app.asar.unpacked`，这里只换完整路径段。
+ */
+export function unpackedAsarPath(path: string): string {
+  return path.replace(/([\\/])app\.asar(?=[\\/])/, '$1app.asar.unpacked');
+}
+
 /** 构造只读 helper 的固定 argv，所有用户路径都保持独立参数。 */
 export function hermesArgs(config: z.infer<typeof hermesConfigSchema>): string[] {
   return [
-    join(PACKAGE_ROOT, 'scripts', 'hermes-notification-snapshot.py'),
+    unpackedAsarPath(join(PACKAGE_ROOT, 'scripts', 'hermes-notification-snapshot.py')),
     '--hermes-root',
     config.hermesRoot,
     ...(config.home ? ['--home', config.home] : []),
