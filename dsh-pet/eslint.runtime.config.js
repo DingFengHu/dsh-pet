@@ -101,6 +101,7 @@ const scriptGlobals = {
   PetSprite: 'readonly',
   OPEN_SHORTCUT_HINT: 'readonly',
   isOpenShortcut: 'readonly',
+  isUsageShortcut: 'readonly',
   playClickSound: 'readonly',
   // events.js
   startLoops: 'readonly',
