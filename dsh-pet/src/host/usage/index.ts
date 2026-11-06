@@ -1,6 +1,8 @@
 /**
  * 用量服务：把五个来源（Codex / Claude 套餐、Codex / Claude API、DeepSeek）装进各自的缓存外壳，
- * 对外只给一份快照。只在面板打开时被轮询驱动，面板关着不会主动访问任何外部接口。
+ * 对外只给一份快照。面板打开时由页面轮询驱动；面板关着时只做后台预热（startBackground）：
+ * 定时刷新不开浏览器标签的来源（Codex / Claude 套餐、DeepSeek），点开面板即是新数。
+ * 走专用 Chrome 标签的来源（Codex API 的赠送额度、Claude API）仍只在面板打开时读取。
  * @module dsh-pet/src/host/usage/index
  */
 import { join } from 'node:path';
@@ -35,7 +37,28 @@ export interface UsageService {
    * @param force - 用户点了刷新：忽略常规节流（仍受每个来源的最短间隔约束）。
    */
   snapshot(force?: boolean, waitMs?: number): Promise<UsageSnapshot>;
+  /** 后台预热：只刷新到期的、不开浏览器标签的来源（按各来源自身节流）。 */
+  warm(): Promise<void>;
+  /**
+   * 启动后台预热定时器（unref，不阻止进程退出）。
+   * @param intervalMs - 预热间隔。
+   * @param firstDelayMs - 首次预热延迟（避开启动高峰）。
+   * @returns 停止函数。
+   */
+  startBackground(intervalMs?: number, firstDelayMs?: number): () => void;
 }
+
+/** 来源表。 */
+export interface UsageSources {
+  readonly codex: Source<PlanUsage>;
+  readonly claude: Source<PlanUsage>;
+  readonly codexApi: Source<ApiUsage>;
+  readonly claudeApi: Source<ApiUsage>;
+  readonly deepseek: Source<DeepSeekBalance>;
+}
+
+/** 后台预热的默认间隔。 */
+export const BACKGROUND_WARM_MS = 3 * 60 * 1000;
 
 const MIN = 60 * 1000;
 
@@ -46,16 +69,7 @@ const MIN = 60 * 1000;
  * @param cwd - CLI 子进程的工作目录。
  * @returns 来源表。
  */
-function buildSources(
-  config: UsageConfig,
-  cwd: string,
-): {
-  codex: Source<PlanUsage>;
-  claude: Source<PlanUsage>;
-  codexApi: Source<ApiUsage>;
-  claudeApi: Source<ApiUsage>;
-  deepseek: Source<DeepSeekBalance>;
-} {
+function buildSources(config: UsageConfig, cwd: string): UsageSources {
   const op = { python: config.python, readerDir: config.opReaderDir };
   const grants = createSource(() => readOpenAiGrants(config.cdpUrl), {
     refreshMs: 6 * 60 * MIN,
@@ -105,11 +119,21 @@ function buildSources(
  * @returns 用量服务。
  */
 export function createUsageService(userRoot: string): UsageService {
-  let sources: Promise<ReturnType<typeof buildSources>> | null = null;
-  return {
+  return createUsageServiceFrom(() => loadUsageConfig(userRoot).then((config) => buildSources(config, userRoot)));
+}
+
+/**
+ * 用给定的来源装配创建用量服务（测试注入）。
+ *
+ * @param load - 惰性装配来源表，只调用一次。
+ * @returns 用量服务。
+ */
+export function createUsageServiceFrom(load: () => Promise<UsageSources>): UsageService {
+  let sources: Promise<UsageSources> | null = null;
+  const get = (): Promise<UsageSources> => (sources ??= load());
+  const service: UsageService = {
     async snapshot(force = false, waitMs = 1500) {
-      sources ??= loadUsageConfig(userRoot).then((config) => buildSources(config, userRoot));
-      const s = await sources;
+      const s = await get();
       const all = [s.codex, s.claude, s.codexApi, s.claudeApi, s.deepseek];
       const pending = Promise.allSettled(all.map((src) => src.ensure(force)));
       await Promise.race([pending, new Promise((r) => setTimeout(r, waitMs))]);
@@ -122,5 +146,23 @@ export function createUsageService(userRoot: string): UsageService {
         generatedAt: Date.now(),
       };
     },
+    async warm() {
+      const s = await get();
+      await Promise.allSettled([s.codex, s.claude, s.deepseek].map((src) => src.ensure(false)));
+    },
+    startBackground(intervalMs = BACKGROUND_WARM_MS, firstDelayMs = 20000) {
+      const tick = (): void => {
+        service.warm().catch(() => undefined);
+      };
+      const first = setTimeout(tick, firstDelayMs);
+      const timer = setInterval(tick, intervalMs);
+      first.unref?.();
+      timer.unref?.();
+      return () => {
+        clearTimeout(first);
+        clearInterval(timer);
+      };
+    },
   };
+  return service;
 }
