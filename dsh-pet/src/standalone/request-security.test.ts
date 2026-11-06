@@ -36,6 +36,9 @@ test('only token-verified requests are marked as authenticated local requests fo
   const good = hermes({ 'x-dsh-pet-token': security.token });
   assert.equal(security.authorize(good, response() as unknown as ServerResponse, true), true);
   assert.equal(isLocalHermesRequest(good), true);
+  const viaCookie = hermes({ cookie: `dsh_pet_token=${security.token}` });
+  assert.equal(security.authorize(viaCookie, response() as unknown as ServerResponse, true), true);
+  assert.equal(isLocalHermesRequest(viaCookie), false, '只有请求头令牌（Electron 渲染端）才获得标记');
   const forged = hermes({ 'x-dsh-pet-token': 'x'.repeat(43) });
   assert.equal(security.authorize(forged, response() as unknown as ServerResponse, true), false);
   assert.equal(isLocalHermesRequest(forged), false);
