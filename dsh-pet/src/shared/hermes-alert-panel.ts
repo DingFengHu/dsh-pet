@@ -36,7 +36,7 @@ export const HERMES_ALERT_CSS = [
   '.dsh-pet-hermes{max-height:16em;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:auto;',
   'display:flex;flex-direction:column;gap:calc(var(--f)*0.2);line-height:1.45}',
   '.dsh-pet-hermes-title{font-weight:400;font-size:calc(var(--f)*0.88);color:#24305e}',
-  '.dsh-pet-hermes-msg{font-size:calc(var(--f)*0.7);color:#5b6488;white-space:pre-wrap;overflow-wrap:anywhere;max-height:calc(var(--f)*9);overflow-y:auto}',
+  '.dsh-pet-hermes-msg{font-size:calc(var(--f)*0.7);color:#b5523b;white-space:pre-wrap;overflow-wrap:anywhere;max-height:calc(var(--f)*9);overflow-y:auto}',
   '.dsh-pet-hermes-status{font-size:calc(var(--f)*0.62);color:#b5523b}',
   // 状态行是 aria-live 区，不能 display:none；空的时候只抵消 flex 间距。
   '.dsh-pet-hermes-status:empty{margin-top:calc(var(--f)*-0.2)}',
@@ -109,12 +109,8 @@ export function createHermesAlertPanel(options: { open: (url: string) => void; b
     if (!view || disposed) return;
     title.textContent = `${hermesTitle(view.alert.title)}${view.count > 1 ? ` (${view.count})` : ''}`;
     message.textContent = view.alert.message;
-    status.textContent = [
-      view.stale ? '提醒数据可能已过时，仍可点击“知道了”在本地忽略' : '',
-      error || (acknowledgedId === view.alert.id ? '已确认，等待同步' : ''),
-    ]
-      .filter(Boolean)
-      .join('\n');
+    // 用户 2026-11-06 要求：不再显示数据新鲜度提示，只留确认失败/等待同步。
+    status.textContent = error || (acknowledgedId === view.alert.id ? '已确认，等待同步' : '');
     open.disabled = !safeHermesUrl(view.alert.url);
     ack.disabled = pending || acknowledgedId === view.alert.id;
     ack.textContent = pending ? '确认中…' : '知道了';

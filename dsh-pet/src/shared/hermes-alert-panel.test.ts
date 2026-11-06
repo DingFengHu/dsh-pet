@@ -1,5 +1,6 @@
 /** Hermes 提醒面板的纯函数与样式约束。 */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { HERMES_ALERT_CSS, hermesTitle } from './hermes-alert-panel.ts';
 
@@ -19,4 +20,9 @@ test('提醒样式不覆盖字体族，也不使用假粗体', () => {
   // 两端气泡基础类都要覆盖到
   assert.match(HERMES_ALERT_CSS, /\.dsh-pet-bubble:has\(>\.dsh-pet-hermes\)/);
   assert.match(HERMES_ALERT_CSS, /\.pet-bubble:has\(>\.dsh-pet-hermes\)/);
+});
+
+test('正文用橙色，不再显示「可能已过时」提示', () => {
+  assert.match(HERMES_ALERT_CSS, /\.dsh-pet-hermes-msg\{[^}]*color:#b5523b/);
+  assert.doesNotMatch(readFileSync(new URL('./hermes-alert-panel.ts', import.meta.url), 'utf8'), /可能已过时/);
 });
