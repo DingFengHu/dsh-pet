@@ -308,6 +308,7 @@ app.whenReady().then(() => {
     screen,
     helperDir: __dirname,
     apiUrl: ORIGIN + PET_ROUTE + '/usage',
+    zoom: () => dpi.petScale(),
   });
   registerIpc({ ipcMain, petWindows, shell, openTarget: OPEN_TARGET, petRoute: PET_ROUTE, usageWindow });
   createDisplaySync({ screen, petWindows, dpi });
