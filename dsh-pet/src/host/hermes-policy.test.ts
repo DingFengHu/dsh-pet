@@ -122,7 +122,7 @@ test('cron 仅用同一失败时间及 canonical execution ID 精确映射，不
 
 test('深链仅允许 default profile 与安全 stored ID，持久化旧行也不能绕过', () => {
   const first = foldSnapshot(disk(), snapshot({ jobs: [job], runs })).pending[0]!;
-  assert.ok(first.kind !== 'huniu');
+  assert.ok(first.kind === 'decision' || first.kind === 'cron');
   const entry = first;
   assert.equal(alertView({ ...entry, profile: 'work' }).url, undefined);
   for (const sessionId of ['../secret', 'a/b', 'a\\b', 'a:b', 'a..b', 'session.id', '%2f', '']) {

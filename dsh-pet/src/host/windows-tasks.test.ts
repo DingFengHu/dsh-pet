@@ -137,7 +137,7 @@ test('启动即跑一轮并落状态；查询未返回时停止会杀子进程',
   const execute = ((file: string, args: string[], _opts: unknown, cb: (e: Error | null, out: string) => void) => {
     calls++;
     assert.equal(file, 'powershell.exe');
-    assert.equal(args.at(-1), QUERY_SCRIPT);
+    assert.equal(args[args.length - 1], QUERY_SCRIPT);
     setImmediate(() => cb(null, '[{"name":"A","state":"Ready","result":0,"lastRun":"t1"}]'));
     return { kill: () => undefined };
   }) as unknown as typeof execFile;
