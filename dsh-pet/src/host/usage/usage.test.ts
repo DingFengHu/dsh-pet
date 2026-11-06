@@ -235,26 +235,29 @@ test('令牌只注入白名单里的渲染页（宠物页与用量面板页）',
   assert.equal(send(pathToFileURL(resolve('runtime/electron-helper/other.html')).href), undefined);
 });
 
-test('面板摆放：优先光标右侧，放不下换左侧，整体钳进工作区', () => {
+test('面板摆放：贴在鱼身右侧不重叠，放不下换左侧，尾巴对准鱼脸，整体钳进工作区', () => {
+  type Rect = { x: number; y: number; width: number; height: number };
   const { placePanel } = createRequire(import.meta.url)('../../../runtime/electron-helper/main/usage-window.js') as {
     placePanel: (
-      c: { x: number; y: number },
-      a: { x: number; y: number; width: number; height: number },
+      b: Rect,
+      a: Rect,
       s: { width: number; height: number },
-    ) => {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    };
+      z?: number,
+    ) => Rect & { side: string; tailY: number };
   };
   const area = { x: 0, y: 0, width: 1920, height: 1040 };
-  assert.deepEqual(placePanel({ x: 100, y: 500 }, area, { width: 400, height: 640 }), {
-    x: 118,
-    y: 180,
-    width: 400,
-    height: 640,
-  });
-  assert.equal(placePanel({ x: 1800, y: 500 }, area, { width: 400, height: 640 }).x, 1382);
-  assert.equal(placePanel({ x: 100, y: 1030 }, area, { width: 400, height: 640 }).y, 400);
+  const body = { x: 400, y: 300, width: 200, height: 300 };
+  const right = placePanel(body, area, { width: 312, height: 440 });
+  assert.equal(right.side, 'left');
+  assert.ok(right.x >= body.x + body.width, '面板不压到鱼身');
+  assert.equal(right.y, 300 + 300 * 0.32 - 70);
+  assert.equal(right.tailY, 70);
+  const left = placePanel({ ...body, x: 1700 }, area, { width: 312, height: 440 });
+  assert.equal(left.side, 'right');
+  assert.ok(left.x + left.width <= 1700, '左侧放置也不压到鱼身');
+  const low = placePanel({ ...body, y: 900 }, area, { width: 312, height: 440 });
+  assert.equal(low.y, 600, '贴底时钳进工作区');
+  assert.ok(low.tailY > 70 && low.tailY <= 440 - 40, '面板被上推后尾巴下移');
+  const zoomed = placePanel(body, area, { width: 546, height: 770 }, 1.75);
+  assert.equal(zoomed.x, Math.round(600 + 2 * 1.75));
 });

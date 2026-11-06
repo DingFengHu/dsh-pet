@@ -357,8 +357,11 @@ Object.assign(PetSprite.prototype, {
     if (isUsageShortcut(e)) {
       this.stopThrow();
       this.stopMove();
-      if (window.petBridge && typeof window.petBridge.toggleUsagePanel === 'function')
-        window.petBridge.toggleUsagePanel();
+      if (window.petBridge && typeof window.petBridge.toggleUsagePanel === 'function') {
+        // 鱼身命中区的窗口内矩形：主进程据此把面板贴在鱼身旁边，不压到鱼
+        const r = this.hit.getBoundingClientRect();
+        window.petBridge.toggleUsagePanel({ x: r.left, y: r.top, width: r.width, height: r.height });
+      }
       return;
     }
     // 积分判定已在 onPointerDown（按下即触发）完成：已触发过就只收手停住，不再播普通点击动画

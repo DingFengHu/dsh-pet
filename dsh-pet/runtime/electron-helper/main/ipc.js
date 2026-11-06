@@ -19,6 +19,24 @@ const { safeHermesUrl } = require('../hermes-url.js');
  * @param deps.petRoute - 宠物路由前缀。
  * @param deps.usageWindow - AI 用量面板（可选）。
  */
+/**
+ * 鱼身命中区：窗口内 CSS 矩形 → 屏幕物理像素矩形（应用强制设备缩放 1，页面缩放即 CSS→物理倍数）。
+ * 渲染端不是信任边界：非有限数或离谱尺寸一律丢弃，面板退回按光标摆放。
+ *
+ * @param win - 宠物窗口。
+ * @param body - 渲染端上报的矩形。
+ * @returns 屏幕矩形或 null。
+ */
+function bodyOnScreen(win, body) {
+  const r = body && typeof body === 'object' ? body : {};
+  const vals = [r.x, r.y, r.width, r.height];
+  if (!vals.every((v) => Number.isFinite(v)) || r.width <= 0 || r.height <= 0 || r.width > 4000 || r.height > 4000)
+    return null;
+  const c = win.getContentBounds();
+  const z = win.webContents.getZoomFactor() || 1;
+  return { x: c.x + r.x * z, y: c.y + r.y * z, width: r.width * z, height: r.height * z };
+}
+
 function registerIpc({ ipcMain, petWindows, shell, openTarget, petRoute, usageWindow }) {
   // 宠物窗口跟随：renderer 逐帧上报窗口内容区位置/尺寸
   ipcMain.on('pet:set-bounds', (event, bounds) => {
@@ -211,10 +229,10 @@ function registerIpc({ ipcMain, petWindows, shell, openTarget, petRoute, usageWi
   });
 
   // Shift+左键点宠物：开关 AI 用量面板。只认宠物窗口发来的请求。
-  ipcMain.on('pet:toggle-usage', (event) => {
+  ipcMain.on('pet:toggle-usage', (event, body) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!usageWindow || !win || win.isDestroyed() || ![...petWindows.state.windows.values()].includes(win)) return;
-    usageWindow.toggle();
+    usageWindow.toggle(bodyOnScreen(win, body));
   });
 
   // 只叫窗口、不改去向：被别的窗口挡住时把主窗口提到前台。
