@@ -127,7 +127,9 @@ test('浏览器失败可重试，HTTP 与业务 ok 均必需，stale 保留旧�
       ![...document.querySelectorAll('button')].find((b) => b.textContent === '知道了').disabled,
   );
   await app.update(snapshot([alert], true));
-  await app.page.getByText('提醒数据可能已过时，仍可点击“知道了”在本地忽略').waitFor();
+  await app.page.getByText(alert.message).waitFor();
+  // 用户 2026-11-06 要求去掉「可能已过时」提示（#13）：stale 时只保留提醒本身。
+  assert.equal(await app.page.getByText('提醒数据可能已过时', { exact: false }).count(), 0);
   assert.equal(await app.page.getByRole('button', { name: '知道了' }).isDisabled(), false);
   assert.equal(await app.page.getByText(alert.message).isVisible(), true);
   assert.equal(app.writes.length, 2);
@@ -144,7 +146,9 @@ test('浏览器失败可重试，HTTP 与业务 ok 均必需，stale 保留旧�
 test('stale 首拉的健康来源提醒仍可打开和本地确认，不发送 Hermes approval', async (t) => {
   const app = await open(t, snapshot([alert], true));
   assert.equal(await app.page.getByRole('button', { name: '知道了' }).isDisabled(), false);
-  await app.page.getByText('提醒数据可能已过时，仍可点击“知道了”在本地忽略').waitFor();
+  await app.page.getByText(alert.message).waitFor();
+  // 用户 2026-11-06 要求去掉「可能已过时」提示（#13）：stale 时只保留提醒本身。
+  assert.equal(await app.page.getByText('提醒数据可能已过时', { exact: false }).count(), 0);
   await app.page.getByRole('button', { name: '查看对话' }).click();
   assert.deepEqual(await app.page.evaluate(() => window.opened), [[alert.url, '_blank', 'noopener,noreferrer']]);
   await app.page.getByRole('button', { name: '知道了' }).click();
@@ -299,7 +303,9 @@ test('原生首拉、输入 busy/矩形和两按钮事件路径，pending 防重
   await app.page.evaluate(() =>
     applyHermesAlertsLeaf({ counter: 2, data: { ...nativeSprite.hermesAlerts, stale: true } }),
   );
-  await app.page.getByText('提醒数据可能已过时，仍可点击“知道了”在本地忽略').waitFor();
+  await app.page.getByText(alert.message).waitFor();
+  // 用户 2026-11-06 要求去掉「可能已过时」提示（#13）：stale 时只保留提醒本身。
+  assert.equal(await app.page.getByText('提醒数据可能已过时', { exact: false }).count(), 0);
   await app.page.evaluate(() => {
     nativeSprite.todoOpen = true;
     nativeSprite.renderBubble();

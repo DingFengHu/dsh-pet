@@ -20,6 +20,7 @@ import { failResult, okResult } from '../result.ts';
 import { saveConfigRoute } from './save.ts';
 import { setPetDisplay } from './display.ts';
 import { savePetLayer } from './entry.ts';
+import { setVoiceEnabledRoute } from './voice.ts';
 
 /** 内容配置领域：未命中返回 undefined，命中返回应答。 */
 export async function handleConfigRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
@@ -29,6 +30,8 @@ export async function handleConfigRoutes(deps: PetRouteDeps, input: RouteInput):
   }
   // 单只宠物的显示位置（桌面端右键「关闭桌面显示」→ POST /pet-display）
   if (input.rest === 'pet-display') return setPetDisplay(deps, input);
+  // 语音播报总开关（桌面端右键「朗读：开 / 关」→ POST /voice-enabled）
+  if (input.rest === 'voice-enabled') return setVoiceEnabledRoute(deps, input);
   // 整个种类层的实例写回（设置页改文件宠物的配置 → POST /pet-config）
   if (input.rest === 'pet-config') return savePetLayer(deps, input);
   // 配置文件路径 + 存储位置清单（设置页「高级配置」与「卸载与存储」展示用）

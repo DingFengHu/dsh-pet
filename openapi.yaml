@@ -1542,6 +1542,45 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
 
+  /dsh-pet-7340/voice-enabled:
+    post:
+      tags: [Config]
+      operationId: setVoiceEnabled
+      summary: 开关语音播报总开关
+      description: |
+        只改用户层 `main-config.jsonc` 的 `voiceEnabled`，与设置页「语音播报」是同一个键：
+        推送气泡（Hermes / Claude / Windows / 虎妞）与待办朗读都受它控制。桌面端右键「朗读」走它。
+
+        写入语义与 `PUT /config` 一致（白名单重建 + 磁盘原值透传），写盘后写一次 `sections.config`
+        信号，但**不重启**桌面 Helper：发起的渲染端已就地生效。用户配置缺失或无法解析时不写盘，
+        回失败实体。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: |
+            成功为 `{ ok: true, voiceEnabled }`；业务失败为 `{ ok: false, reason, message }`
+            （`bad-request` / `user-config-unparsable` / `generate-error`）。
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: "请求体不是合法 JSON（`reason: invalid-json`）。"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /dsh-pet-7340/pet-display:
     post:
       tags: [Config]

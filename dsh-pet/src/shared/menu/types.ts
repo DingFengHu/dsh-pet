@@ -14,8 +14,9 @@ export interface MenuLeaf {
   anim?: string;
   /** 自定义动作：打开网站 / 打开待办面板 / 回到初始位置 /
    *  重载配置（桌面端专属，重启桌面 Helper 并按最新配置重建窗口）/ 改显示位置（目标值见 display，
-   *  两端都注入）/ 第三方菜单项（只把 owner 与 label 上报给注册方，具体做什么由它决定）。 */
-  action?: 'open-site' | 'todo' | 'home' | 'reload' | 'set-display' | 'third-party';
+   *  两端都注入）/ 第三方菜单项（只把 owner 与 label 上报给注册方，具体做什么由它决定）/
+   *  切换朗读（桌面端专属，开关语音播报总开关，推送气泡与待办朗读都受它控制）。 */
+  action?: 'open-site' | 'todo' | 'home' | 'reload' | 'set-display' | 'third-party' | 'voice-toggle';
   /** set-display 的目标显示位置（与设置页的下拉框同一套取值） */
   display?: PetDisplay;
   /** third-party：注册它的 owner（身份键，只用于回传，不显示）；同一个 owner 的项收在同一分组下，

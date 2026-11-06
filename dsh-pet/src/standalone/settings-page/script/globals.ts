@@ -30,7 +30,7 @@ function globalFlagsCard() {
 function voiceCard() {
   const g = state.globals;
   return card('语音', '桌宠开口说话用的音色与音量。', [
-    toggleRow('g-voice', '语音播报', '关闭后所有语音都静音，文字气泡不受影响。', g.voiceEnabled, (value) => setGlobal('voiceEnabled', value)),
+    toggleRow('g-voice', '语音播报', '关闭后所有语音都静音（含 Hermes / Claude / Windows / 虎妞推送气泡的朗读），文字气泡不受影响。右键大肥鱼「朗读」可一键切换。', g.voiceEnabled, (value) => setGlobal('voiceEnabled', value)),
     selectField('g-voice-name', '音色', g.voiceName, VOICES.map((voice) => ({ value: voice.id, label: voice.name + ' · ' + voice.tag })), (value) => setGlobal('voiceName', value)),
     numberField('g-voice-volume', '音量（0–1）', g.voiceVolume, (value) => setGlobal('voiceVolume', clampNumber(value, 0, 1, 1)), { min: 0, max: 1, step: 0.05 }),
     toggleRow('g-voice-todo', '待办提醒也念出来', '关掉只影响待办提醒的朗读。', g.voiceTodoEnabled, (value) => setGlobal('voiceTodoEnabled', value)),
