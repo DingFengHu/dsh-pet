@@ -40,8 +40,9 @@ function placePanel(cursor, area, size) {
  * @param deps.screen - Electron screen。
  * @param deps.helperDir - runtime/electron-helper 目录。
  * @param deps.apiUrl - 用量数据地址（`<origin>/dsh-pet-7340/usage`）。
+ * @param deps.zoom - 页面缩放（与宠物窗口同源：应用强制设备缩放为 1，高 DPI 屏靠 zoomFactor 放大）。
  */
-function createUsageWindow({ BrowserWindow, screen, helperDir, apiUrl }) {
+function createUsageWindow({ BrowserWindow, screen, helperDir, apiUrl, zoom = () => 1 }) {
   /** @type {import('electron').BrowserWindow | null} */
   let win = null;
   /** 刚刚因失焦收起的时刻：同一次 Shift+点击先触发失焦再触发 toggle，别把它又打开。 */
@@ -72,6 +73,10 @@ function createUsageWindow({ BrowserWindow, screen, helperDir, apiUrl }) {
       },
     });
     win.setAlwaysOnTop(true, 'pop-up-menu');
+    win.webContents.on(
+      'did-finish-load',
+      () => win && !win.isDestroyed() && win.webContents.setZoomFactor(currentZoom()),
+    );
     win.webContents.on('context-menu', (event) => event.preventDefault());
     // 页面里只有本机数据请求；任何导航或新窗口一律拒绝。
     win.webContents.on('will-navigate', (event) => event.preventDefault());
@@ -97,6 +102,11 @@ function createUsageWindow({ BrowserWindow, screen, helperDir, apiUrl }) {
     return win;
   }
 
+  function currentZoom() {
+    const z = Number(zoom());
+    return Number.isFinite(z) && z >= 0.5 && z <= 4 ? z : 1;
+  }
+
   function hide() {
     if (!win || win.isDestroyed() || !win.isVisible()) return;
     win.webContents.executeJavaScript('window.__usageHidden && window.__usageHidden()').catch(() => undefined);
@@ -107,7 +117,9 @@ function createUsageWindow({ BrowserWindow, screen, helperDir, apiUrl }) {
     const w = ensure();
     const cursor = screen.getCursorScreenPoint();
     const area = screen.getDisplayNearestPoint(cursor).workArea;
-    w.setBounds(placePanel(cursor, area, { width: PANEL_W, height: PANEL_H }));
+    const z = currentZoom();
+    w.webContents.setZoomFactor(z);
+    w.setBounds(placePanel(cursor, area, { width: Math.round(PANEL_W * z), height: Math.round(PANEL_H * z) }));
     w.show();
     w.focus();
     // 页面据此立即刷新一次（隐藏期间不轮询）
