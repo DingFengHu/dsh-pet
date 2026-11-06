@@ -10,6 +10,7 @@ import { access, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
+import type { LazySecret } from './secrets.ts';
 import { arr, obj, type Loose } from './source.ts';
 
 /** 一个额度窗口。 */
@@ -281,6 +282,72 @@ export function summarizeClaudeHistory(history: unknown): PlanUsage {
   return { fiveHour, weekly, plan: null, source: 'claude-desktop', updatedAt: latest.t as number };
 }
 
+/**
+ * 模型应答头 anthropic-ratelimit-unified-* → 快照。利用率是 0-1 的小数，重置时间是秒级时间戳。
+ *
+ * @param headers - 应答头。
+ * @param now - 当前时间。
+ * @returns 快照。
+ */
+export function summarizeClaudeHeaders(headers: Headers, now = Date.now()): PlanUsage {
+  const pick = (window: string): PlanWindow | null => {
+    const raw = headers.get(`anthropic-ratelimit-unified-${window}-utilization`);
+    const util = raw === null ? Number.NaN : Number.parseFloat(raw);
+    if (!Number.isFinite(util)) return null;
+    const used = Math.round(util * 1000) / 10;
+    const reset = Number.parseInt(headers.get(`anthropic-ratelimit-unified-${window}-reset`) ?? '', 10);
+    return { remainingPercent: clampPct(used), usedPercent: used, resetsAt: Number.isFinite(reset) ? reset : null };
+  };
+  const fiveHour = pick('5h');
+  const weekly = pick('7d');
+  if (!fiveHour && !weekly) throw new Error('Claude 应答里没有额度信息。');
+  return { fiveHour, weekly, plan: null, source: 'claude-token', updatedAt: now };
+}
+
+/** 令牌探针用的地址与模型：最便宜的模型、1 个输出 token。 */
+const PROBE_URL = 'https://api.anthropic.com/v1/messages';
+const PROBE_MODEL = 'claude-haiku-4-5';
+
+/**
+ * 用长期 OAuth 令牌（claude setup-token）读额度。这种令牌没有 user:profile 权限，读不了额度接口，
+ * 只能发一次极小的模型请求（1 个输出 token），从应答头取额度；会消耗极少量订阅额度。
+ *
+ * @param token - 令牌（1Password，只放内存）。
+ * @param fetchImpl - fetch（测试注入）。
+ * @returns 读取函数。
+ */
+export function createClaudeTokenProbe(token: LazySecret, fetchImpl: typeof fetch = fetch): () => Promise<PlanUsage> {
+  return async () => {
+    // 从终端复制的令牌常夹带换行，去掉所有空白。
+    const key = (await token.get()).replace(/\s+/g, '');
+    let response: Response;
+    try {
+      response = await fetchImpl(PROBE_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'oauth-2025-04-20',
+          'content-type': 'application/json',
+          'user-agent': 'dsh-pet-usage',
+        },
+        body: JSON.stringify({ model: PROBE_MODEL, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+        signal: AbortSignal.timeout(15000),
+        redirect: 'error',
+      });
+    } catch {
+      throw new Error('Claude 令牌查询连接失败。');
+    }
+    await response.body?.cancel().catch(() => undefined);
+    if (response.status === 401 || response.status === 403) {
+      token.forget();
+      throw new Error('Claude 长期令牌无效或已过期，请重新运行 claude setup-token 并更新 1Password。');
+    }
+    if (!response.ok && response.status !== 429) throw new Error(`Claude 令牌查询失败（HTTP ${response.status}）。`);
+    return summarizeClaudeHeaders(response.headers);
+  };
+}
+
 async function readClaudeCli(override: string | null): Promise<PlanUsage> {
   const cli = await findClaudeCli(override);
   const cwd = process.env.USERPROFILE ?? process.cwd();
@@ -323,27 +390,67 @@ async function readClaudeDesktop(): Promise<PlanUsage | null> {
   return null;
 }
 
+/** 令牌探针的最短间隔：每次都是一次真实模型请求，所以最多每 15 分钟一次。 */
+export const TOKEN_PROBE_MIN_MS = 15 * 60 * 1000;
+
+/** createClaudePlanReader 的可选项。 */
+export interface ClaudePlanReaderOptions {
+  /** CLI 读不到时的令牌探针；未配置令牌时不传。 */
+  readonly tokenProbe?: () => Promise<PlanUsage>;
+  /** 探针最短间隔（ms）。 */
+  readonly probeMinMs?: number;
+  /** CLI 读取（测试注入）。 */
+  readonly readCli?: () => Promise<PlanUsage>;
+  /** 桌面端记录读取（测试注入）。 */
+  readonly readDesktop?: () => Promise<PlanUsage | null>;
+  /** 时钟（测试注入）。 */
+  readonly now?: () => number;
+}
+
 /**
- * Claude 套餐额度读取器：上游对用量查询限流（常回 rate_limits: null），失败时沿用上次实时数据
- * （内存 → 落盘缓存 → 桌面端记录，取最新的那份），并在 liveError 里说明，面板据此标注数据时间。
+ * Claude 套餐额度读取器：先走 CLI 的 get_usage；读不到（限流、CLI 未登录）时，若配置了长期令牌，
+ * 按节流发一次令牌探针。都不行就沿用上次实时数据（内存 → 落盘缓存 → 桌面端记录，取最新的那份），
+ * 并在 liveError 里说明，面板据此标注数据时间。节流期内上次探针结果仍新鲜时直接返回它，不算过期。
  *
  * @param override - CLI 路径覆盖。
  * @param cacheFile - 上次实时数据的落盘位置（只有额度数字）；null 不落盘。
+ * @param options - 令牌探针与测试注入。
  * @returns 读取函数。
  */
 export function createClaudePlanReader(
   override: string | null,
   cacheFile: string | null = null,
+  options: ClaudePlanReaderOptions = {},
 ): () => Promise<PlanUsage> {
+  const now = options.now ?? Date.now;
+  const probeMinMs = options.probeMinMs ?? TOKEN_PROBE_MIN_MS;
+  const readCli = options.readCli ?? (() => readClaudeCli(override));
+  const readDesktop = options.readDesktop ?? readClaudeDesktop;
   let lastLive: PlanUsage | null = null;
   let loaded = false;
+  let probeAt = Number.NEGATIVE_INFINITY;
+  const remember = async (value: PlanUsage): Promise<PlanUsage> => {
+    lastLive = value;
+    if (cacheFile) await writeFile(cacheFile, JSON.stringify(value), 'utf8').catch(() => undefined);
+    return value;
+  };
   return async () => {
     try {
-      lastLive = await readClaudeCli(override);
-      if (cacheFile) await writeFile(cacheFile, JSON.stringify(lastLive), 'utf8').catch(() => undefined);
-      return lastLive;
+      return await remember(await readCli());
     } catch (error) {
-      const message = error instanceof Error ? error.message : '读取失败';
+      let message = error instanceof Error ? error.message : '读取失败';
+      if (options.tokenProbe) {
+        if (now() - probeAt >= probeMinMs) {
+          probeAt = now();
+          try {
+            return await remember({ ...(await options.tokenProbe()), updatedAt: now() });
+          } catch (probeError) {
+            message += ' 长期令牌兜底也失败：' + (probeError instanceof Error ? probeError.message : '读取失败');
+          }
+        } else if (lastLive?.source === 'claude-token' && now() - lastLive.updatedAt <= probeMinMs + 5 * 60 * 1000) {
+          return lastLive;
+        }
+      }
       if (!lastLive && !loaded && cacheFile) {
         loaded = true;
         try {
@@ -354,7 +461,7 @@ export function createClaudePlanReader(
           /* 没有缓存 */
         }
       }
-      const desktop = await readClaudeDesktop();
+      const desktop = await readDesktop();
       const best = lastLive && (!desktop || lastLive.updatedAt > desktop.updatedAt) ? lastLive : desktop;
       if (best) return { ...best, liveError: message };
       throw error;

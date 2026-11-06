@@ -15,7 +15,15 @@ import {
   summarizeOpenAiKeys,
 } from './api-keys.ts';
 import { parseUsageConfig } from './config.ts';
-import { summarizeClaudeHistory, summarizeClaudeUsage, summarizeCodex } from './plan.ts';
+import {
+  createClaudePlanReader,
+  createClaudeTokenProbe,
+  summarizeClaudeHeaders,
+  summarizeClaudeHistory,
+  summarizeClaudeUsage,
+  summarizeCodex,
+  type PlanUsage,
+} from './plan.ts';
 import { createLazySecret } from './secrets.ts';
 import { createSource } from './source.ts';
 import { createUsageServiceFrom, type UsageSources } from './index.ts';
@@ -155,12 +163,13 @@ test('配置：非法字段回落默认，标识符只来自本机文件', () =>
   assert.equal(empty.deepseekItem, null);
   assert.equal(empty.cdpUrl, 'http://127.0.0.1:9222');
   const c = parseUsageConfig({
-    onePassword: { readerDir: 'D:/x', items: { deepseek: 'abc', openaiAdmin: ' ' } },
+    onePassword: { readerDir: 'D:/x', items: { deepseek: 'abc', openaiAdmin: ' ', claudeOauth: 'tok1' } },
     credits: { claude: { expiresAt: '2026-11-07', resetDay: 40 } },
   });
   assert.equal(c.opReaderDir, 'D:/x');
   assert.equal(c.deepseekItem, 'abc');
   assert.equal(c.openaiAdminItem, null);
+  assert.equal(c.claudeOauthItem, 'tok1');
   assert.equal(c.credits.claude.resetDay, 1);
   assert.equal(c.credits.claude.expiresAt, Date.parse('2026-11-07T00:00:00Z'));
 });
@@ -290,4 +299,97 @@ test('后台预热：只刷新不开浏览器标签的来源，面板关着也�
   assert.deepEqual(calls.sort(), ['claude', 'claudeApi', 'codex', 'codexApi', 'deepseek']);
   const stop = service.startBackground(60000, 60000);
   stop();
+});
+
+test('Claude 应答头：7d / 5h 利用率小数转百分比，缺头报错', () => {
+  const h = new Headers({
+    'anthropic-ratelimit-unified-7d-utilization': '0.11',
+    'anthropic-ratelimit-unified-7d-reset': '1794524400',
+  });
+  const r = summarizeClaudeHeaders(h, 5);
+  assert.equal(r.weekly?.usedPercent, 11);
+  assert.equal(r.weekly?.remainingPercent, 89);
+  assert.equal(r.weekly?.resetsAt, 1794524400);
+  assert.equal(r.fiveHour, null);
+  assert.equal(r.source, 'claude-token');
+  assert.throws(() => summarizeClaudeHeaders(new Headers()), /没有额度信息/);
+});
+
+test('Claude 令牌探针：去掉令牌里的换行、只发 1 个输出 token，401 时丢弃缓存的令牌', async () => {
+  let forgot = 0;
+  const secret = { get: async () => 'sk-ant-oat01-abc\ndef ', forget: () => void forgot++ };
+  const seen: { auth: string | null; body: unknown }[] = [];
+  let status = 200;
+  const fake = (async (_url: unknown, init?: RequestInit) => {
+    seen.push({ auth: new Headers(init?.headers).get('authorization'), body: JSON.parse(String(init?.body)) });
+    return new Response('{}', { status, headers: { 'anthropic-ratelimit-unified-7d-utilization': '0.2' } });
+  }) as typeof fetch;
+  const probe = createClaudeTokenProbe(secret, fake);
+  assert.equal((await probe()).weekly?.usedPercent, 20);
+  assert.equal(seen[0].auth, 'Bearer sk-ant-oat01-abcdef');
+  assert.equal((seen[0].body as { max_tokens: number }).max_tokens, 1);
+  status = 401;
+  await assert.rejects(probe(), /长期令牌无效/);
+  assert.equal(forgot, 1);
+});
+
+test('Claude 套餐读取器：CLI 失败才用令牌兜底，按间隔节流，节流期内沿用新鲜的令牌结果', async () => {
+  let t = 1_000_000;
+  let probes = 0;
+  let cliOk = false;
+  const live = (used: number, source: string): PlanUsage => ({
+    fiveHour: null,
+    weekly: { remainingPercent: 100 - used, usedPercent: used, resetsAt: null },
+    plan: null,
+    source,
+    updatedAt: t,
+  });
+  const read = createClaudePlanReader(null, null, {
+    now: () => t,
+    probeMinMs: 15 * 60_000,
+    readDesktop: async () => null,
+    readCli: async () => {
+      if (cliOk) return live(30, 'claude-cli');
+      throw new Error('Claude CLI 未登录');
+    },
+    tokenProbe: async () => {
+      probes++;
+      return live(11, 'claude-token');
+    },
+  });
+  const a = await read();
+  assert.equal(a.weekly?.usedPercent, 11);
+  assert.equal(a.liveError, undefined);
+  t += 5 * 60_000;
+  const b = await read();
+  assert.equal(probes, 1, '节流期内不再发探针');
+  assert.equal(b.liveError, undefined, '新鲜的令牌结果不算过期');
+  t += 11 * 60_000;
+  await read();
+  assert.equal(probes, 2, '过了间隔再发一次');
+  cliOk = true;
+  const c = await read();
+  assert.equal(c.source, 'claude-cli');
+  assert.equal(probes, 2, 'CLI 正常时不发探针');
+});
+
+test('Claude 套餐读取器：令牌也失败时回落旧数据并写明两层原因', async () => {
+  const read = createClaudePlanReader(null, null, {
+    readDesktop: async () => ({
+      fiveHour: null,
+      weekly: { remainingPercent: 96, usedPercent: 4, resetsAt: null },
+      plan: null,
+      source: 'claude-desktop',
+      updatedAt: 1,
+    }),
+    readCli: async () => {
+      throw new Error('Claude CLI 未登录。');
+    },
+    tokenProbe: async () => {
+      throw new Error('令牌坏了');
+    },
+  });
+  const r = await read();
+  assert.equal(r.weekly?.usedPercent, 4);
+  assert.match(r.liveError ?? '', /CLI 未登录.*长期令牌兜底也失败：令牌坏了/);
 });

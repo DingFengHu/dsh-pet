@@ -16,7 +16,7 @@ import {
   type DeepSeekBalance,
 } from './api-keys.ts';
 import { loadUsageConfig, type UsageConfig } from './config.ts';
-import { createClaudePlanReader, readCodexPlan, type PlanUsage } from './plan.ts';
+import { createClaudePlanReader, createClaudeTokenProbe, readCodexPlan, type PlanUsage } from './plan.ts';
 import { createLazySecret } from './secrets.ts';
 import { createSource, type Source, type SourceSnapshot } from './source.ts';
 
@@ -90,11 +90,18 @@ function buildSources(config: UsageConfig, cwd: string): UsageSources {
       retryMs: 15000,
       minForceMs: 10000,
     }),
-    claude: createSource(createClaudePlanReader(config.claudeCli, join(cwd, 'usage-claude-last.json')), {
-      refreshMs: MIN,
-      retryMs: MIN,
-      minForceMs: 30000,
-    }),
+    claude: createSource(
+      createClaudePlanReader(config.claudeCli, join(cwd, 'usage-claude-last.json'), {
+        tokenProbe: config.claudeOauthItem
+          ? createClaudeTokenProbe(createLazySecret(op, config.claudeOauthItem, 'Claude 长期令牌'))
+          : undefined,
+      }),
+      {
+        refreshMs: MIN,
+        retryMs: MIN,
+        minForceMs: 30000,
+      },
+    ),
     codexApi: createSource(
       createCodexApiReader(config, createLazySecret(op, config.openaiAdminItem, 'OpenAI Admin Key'), readGrants),
       {
