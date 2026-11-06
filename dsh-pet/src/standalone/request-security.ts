@@ -8,6 +8,7 @@
  */
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { markAuthenticatedLocalRequest } from '../host/plugin/local-request.ts';
 
 /** 请求安全门面。 */
 export interface RequestSecurity {
@@ -118,6 +119,9 @@ export function createRequestSecurity(): RequestSecurity {
         // Path 取根：设置页也要调 /dsh-pet-<n>/ 下的插件写路由，限定在 /standalone-ai/ 会让它拿不到凭据。
         res.setHeader('set-cookie', `${TOKEN_COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/`);
       }
+      // 请求头令牌只由主进程注入给本进程的 file 渲染端（desktop-auth.ts）：告诉宿主的 Hermes 确认守卫可视同同源。
+      // cookie 路径（浏览器里的设置页）不打标记，最小权限。
+      if (fromHeader) markAuthenticatedLocalRequest(req);
       return true;
     },
   };

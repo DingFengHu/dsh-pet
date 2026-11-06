@@ -113,11 +113,26 @@ npm run dist              # electron-builder 打包
 
 ### 能力边界
 
-- **能用**：动画链、点击/拖拽/甩抛、右键菜单、多开、自定义动画与表情包、pet pack。
+- **能用**：动画链、点击/拖拽/甩抛、右键菜单、多开、自定义动画与表情包、pet pack、待办提醒、[Hermes 只读提醒](HERMES.md)。
 - **不可用**：余额、碎碎念、对话、系统通知——没有 DSH 的凭据与模型连接，接口返回带 `reason` 的结构化失败（见 [API.md](API.md)）。
-- **配置**：与 DSH 同一份（`$DSH_HOME/dsh-pet/main-config.jsonc` → 包内默认）。
+- **配置**：与 DSH 同一份（`$DSH_HOME/dsh-pet/main-config.jsonc` → 包内默认）；Hermes 提醒同样读 `$DSH_HOME/dsh-pet/hermes-alerts.jsonc`，确认记录也写在同目录，DSH 内与独立版共用。
 - **只显示** `display` 含 `desktop` / `both` 的实例；端口默认 3080（占用则顺延）。
-- **可与 DSH 内运行同时开**，但共用 `%APPDATA%\dsh-pet-electron-helper`，可能互相踩缓存（仅告警）。
+- **主屏缩放**：打包版会重新拉起 `dsh-pet.exe` 探测 Windows 主屏缩放（结果缓存在 `%APPDATA%\dsh-pet\primary-scale.json`），与 DSH 内同样做强制缩放和小于 2K 屏的缩小。
+- **别和 DSH 内的同一只同时开**：两边读同一份配置，会出现两只；独立版常驻时从 DSH 的插件列表移除 `dsh-pet`（`dsh plugin --profile desktop remove dsh-pet`，数据目录不受影响）。
+
+### 开机自启（Windows，无控制台窗口）
+
+`dsh-pet.exe` 是 GUI 程序，直接作为登录触发的计划任务动作即可，不会弹控制台：
+
+```powershell
+$a = New-ScheduledTaskAction -Execute 'D:\App\dsh-pet\dsh-pet.exe' -WorkingDirectory 'D:\App\dsh-pet'
+$t = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"; $t.Delay = 'PT20S'
+$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable
+Register-ScheduledTask -TaskName 'DSH Pet Standalone' -Action $a -Trigger $t -Principal $p -Settings $s
+```
+
+升级：`npm run build && npm run dist` 后，先 `Stop-ScheduledTask 'DSH Pet Standalone'`，再把 `dist-app/win-unpacked` 镜像到安装目录，最后 `Start-ScheduledTask`。
 
 ## 安装后你会看到什么
 

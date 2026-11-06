@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRequestSecurity } from './request-security.ts';
+import { isLocalHermesRequest } from '../host/plugin/http-route.ts';
 
 function request(headers: Record<string, string> = {}, url = '/private', method = 'GET'): IncomingMessage {
   return {
@@ -25,6 +26,31 @@ function response() {
     end() {},
   };
 }
+test('only token-verified requests are marked as authenticated local requests for the Hermes ack guard', () => {
+  const security = createRequestSecurity();
+  const hermes = (headers: Record<string, string>) =>
+    ({
+      ...request({ origin: 'null', ...headers }, '/dsh-pet-7340/hermes/ack', 'POST'),
+      socket: { localPort: 3080, remoteAddress: '127.0.0.1' },
+    }) as unknown as IncomingMessage;
+  const good = hermes({ 'x-dsh-pet-token': security.token });
+  assert.equal(security.authorize(good, response() as unknown as ServerResponse, true), true);
+  assert.equal(isLocalHermesRequest(good), true);
+  const viaCookie = hermes({ cookie: `dsh_pet_token=${security.token}` });
+  assert.equal(security.authorize(viaCookie, response() as unknown as ServerResponse, true), true);
+  assert.equal(isLocalHermesRequest(viaCookie), false, '只有请求头令牌（Electron 渲染端）才获得标记');
+  const forged = hermes({ 'x-dsh-pet-token': 'x'.repeat(43) });
+  assert.equal(security.authorize(forged, response() as unknown as ServerResponse, true), false);
+  assert.equal(isLocalHermesRequest(forged), false);
+  const publicGet = {
+    ...request({}, '/health'),
+    socket: { localPort: 3080, remoteAddress: '127.0.0.1' },
+  } as unknown as IncomingMessage;
+  assert.equal(security.authorize(publicGet, response() as unknown as ServerResponse), true);
+  publicGet.headers.origin = 'null';
+  assert.equal(isLocalHermesRequest(publicGet), false, '公开读取不经令牌，不能获得标记');
+});
+
 test('capabilities are random, fragment-only, and process-bound', () => {
   const a = createRequestSecurity();
   const b = createRequestSecurity();

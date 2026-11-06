@@ -12,6 +12,7 @@ import { failureBody } from '../routes/result.ts';
 import { createPetRouter } from '../routes/index.ts';
 import type { PetRouteDeps } from '../routes/types.ts';
 import type { HostContext } from './context.ts';
+import { isAuthenticatedLocalRequest } from './local-request.ts';
 
 /** 单次业务请求的处理函数：URL 已解析、方法已归一。 */
 export type HttpRouteHandler = (
@@ -64,6 +65,8 @@ export function createHttpRoute(deps: PetRouteDeps): { handlePetRoute: HttpRoute
   return { handlePetRoute };
 }
 
+export { markAuthenticatedLocalRequest } from './local-request.ts';
+
 /** 只收同源回环 HTTP 请求，桌面受信管道仍直接复用业务路由。 */
 export function isLocalHermesRequest(req: IncomingMessage): boolean {
   const address = req.socket.remoteAddress;
@@ -77,6 +80,8 @@ export function isLocalHermesRequest(req: IncomingMessage): boolean {
       host.pathname !== '/'
     )
       return false;
+    // 独立模式：file 渲染端已由外层令牌认证（见 local-request.ts），回环与 Host 检查已在上方完成。
+    if (isAuthenticatedLocalRequest(req)) return true;
     if (!req.headers.origin) return req.headers['sec-fetch-site'] !== 'cross-site';
     const origin = new URL(req.headers.origin);
     return (
