@@ -113,7 +113,7 @@ npm run dist              # electron-builder 打包
 
 ### 能力边界
 
-- **能用**：动画链、点击/拖拽/甩抛、右键菜单、多开、自定义动画与表情包、pet pack、待办提醒、[Hermes 只读提醒](HERMES.md)。
+- **能用**：动画链、点击/拖拽/甩抛、右键菜单、多开、自定义动画与表情包、pet pack、待办提醒、[Hermes 只读提醒](HERMES.md)、[AI 用量面板](USAGE.md)（Shift+左键点鱼）。
 - **不可用**：余额、碎碎念、对话、系统通知——没有 DSH 的凭据与模型连接，接口返回带 `reason` 的结构化失败（见 [API.md](API.md)）。
 - **配置**：与 DSH 同一份（`$DSH_HOME/dsh-pet/main-config.jsonc` → 包内默认）；Hermes 提醒同样读 `$DSH_HOME/dsh-pet/hermes-alerts.jsonc`，确认记录也写在同目录，DSH 内与独立版共用。
 - **只显示** `display` 含 `desktop` / `both` 的实例；端口默认 3080（占用则顺延）。

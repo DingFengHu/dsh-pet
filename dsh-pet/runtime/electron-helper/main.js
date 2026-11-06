@@ -50,6 +50,7 @@ const { createBridge } = require('./main/bridge.js');
 const { createTray } = require('./main/tray.js');
 const { createWindows } = require('./main/windows.js');
 const { registerIpc } = require('./main/ipc.js');
+const { createUsageWindow } = require('./main/usage-window.js');
 const { createDisplaySync } = require('./main/displays.js');
 const { dshHomeDir, resolveUserDataDir } = require('./main/user-data.js');
 
@@ -301,7 +302,14 @@ app.whenReady().then(() => {
   powerMonitor.on('resume', reassertTaskbar);
   powerMonitor.on('unlock-screen', reassertTaskbar);
 
-  registerIpc({ ipcMain, petWindows, shell, openTarget: OPEN_TARGET, petRoute: PET_ROUTE });
+  // Shift+左键点宠物弹出的 AI 用量面板（单例窗口，首次打开才建）
+  const usageWindow = createUsageWindow({
+    BrowserWindow,
+    screen,
+    helperDir: __dirname,
+    apiUrl: ORIGIN + PET_ROUTE + '/usage',
+  });
+  registerIpc({ ipcMain, petWindows, shell, openTarget: OPEN_TARGET, petRoute: PET_ROUTE, usageWindow });
   createDisplaySync({ screen, petWindows, dpi });
 
   // 冒烟自检（默认关闭）：DSH_PET_SMOKE=1 时延时截图到 DSH_PET_SMOKE_OUT 后退出，

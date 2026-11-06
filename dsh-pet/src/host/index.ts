@@ -18,6 +18,7 @@ import { createVoiceService } from './voice/speak.ts';
 import { TODO_FILE_NAME, TodoStore } from './todo/store.ts';
 import { createHermesAlerts, HERMES_STATE_FILE } from './hermes-alerts.ts';
 import { startHermesPolling } from './hermes-poll.ts';
+import { createUsageService } from './usage/index.ts';
 import { join } from 'node:path';
 import type { PetRouteDeps } from './routes/types.ts';
 
@@ -105,6 +106,8 @@ export function apply(ctx: any): void {
     ctx,
     todos,
     hermesAlerts,
+    // AI 用量面板：只在面板打开时被轮询驱动
+    usage: createUsageService(userRoot),
     // 语音合成：缓存落 userRoot，失败只留日志，不打断宿主
     voice: createVoiceService({ userRoot, log }),
   };

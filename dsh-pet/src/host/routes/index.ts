@@ -19,6 +19,7 @@ import { handleSessionRoutes } from './session.ts';
 import { handleStateRoutes } from './state.ts';
 import { handleTodoRoutes } from './todos.ts';
 import { handleHermesRoutes } from './hermes.ts';
+import { handleUsageRoutes } from './usage.ts';
 import { handleVoiceRoutes } from './voice.ts';
 import type { PetRouteDeps, RouteHandler } from './types.ts';
 
@@ -34,6 +35,7 @@ const HANDLERS: readonly RouteHandler[] = [
   handlePlaybackRoutes,
   handleTodoRoutes,
   handleHermesRoutes,
+  handleUsageRoutes,
   handleVoiceRoutes,
   handleAvatarRoutes,
   handleAssetsRoutes,

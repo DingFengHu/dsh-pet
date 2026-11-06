@@ -66,6 +66,10 @@ contextBridge.exposeInMainWorld('petBridge', {
   focusDshHost() {
     ipcRenderer.send('pet:focus-host');
   },
+  // Shift+左键点宠物：开关 AI 用量面板（窗口与位置由主进程决定）。
+  toggleUsagePanel() {
+    ipcRenderer.send('pet:toggle-usage');
+  },
   // 宠物间碰撞（跨窗 broker）：飞行方上报状态，主进程汇聚广播；被撞方收 pet:hit 后按新初速抛出。
   reportFlight(state) {
     ipcRenderer.send('pet:report-flight', state);
