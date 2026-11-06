@@ -48,12 +48,26 @@ function createUsageWindow({ BrowserWindow, screen, helperDir, apiUrl, zoom = ()
   /** 刚刚因失焦收起的时刻：同一次 Shift+点击先触发失焦再触发 toggle，别把它又打开。 */
   let hiddenByBlurAt = 0;
 
-  function ensure() {
-    if (win && !win.isDestroyed()) return win;
+  /**
+   * 取（必要时新建）面板窗口。透明窗口在首帧前改尺寸会整窗不绘制（实测 Windows），
+   * 所以窗口直接按目标尺寸创建；缩放变了（换屏 / 改 DPI）就重建而不是 setSize。
+   *
+   * @param bounds - 目标矩形。
+   */
+  function ensure(bounds) {
+    if (win && !win.isDestroyed()) {
+      const [w, h] = win.getSize();
+      if (w === bounds.width && h === bounds.height) return win;
+      win.destroy();
+      win = null;
+    }
     win = new BrowserWindow({
-      width: PANEL_W,
-      height: PANEL_H,
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
       show: false,
+      backgroundColor: '#00000000',
       frame: false,
       transparent: true,
       resizable: false,
@@ -111,17 +125,23 @@ function createUsageWindow({ BrowserWindow, screen, helperDir, apiUrl, zoom = ()
     if (!win || win.isDestroyed() || !win.isVisible()) return;
     win.webContents.executeJavaScript('window.__usageHidden && window.__usageHidden()').catch(() => undefined);
     win.hide();
+    console.log('[dsh-pet-desktop-helper] usage panel hidden');
   }
 
   function show() {
-    const w = ensure();
     const cursor = screen.getCursorScreenPoint();
     const area = screen.getDisplayNearestPoint(cursor).workArea;
     const z = currentZoom();
+    const bounds = placePanel(cursor, area, { width: Math.round(PANEL_W * z), height: Math.round(PANEL_H * z) });
+    const w = ensure(bounds);
     w.webContents.setZoomFactor(z);
-    w.setBounds(placePanel(cursor, area, { width: Math.round(PANEL_W * z), height: Math.round(PANEL_H * z) }));
+    w.setPosition(bounds.x, bounds.y);
     w.show();
     w.focus();
+    w.webContents.focus();
+    console.log(
+      `[dsh-pet-desktop-helper] usage panel shown ${bounds.width}x${bounds.height}@${bounds.x},${bounds.y} zoom=${z}`,
+    );
     // 页面据此立即刷新一次（隐藏期间不轮询）
     w.webContents.executeJavaScript('window.__usageShown && window.__usageShown()').catch(() => undefined);
   }
