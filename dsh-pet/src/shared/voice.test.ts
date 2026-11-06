@@ -17,7 +17,10 @@ import assert from 'node:assert/strict';
 import {
   VOICE_SPEECH_MAX_CHARS,
   getVoiceState,
+  isVoiceEnabled,
   playSayVoice,
+  setVoiceEnabled,
+  speakAlert,
   setSurface,
   setVoiceConfig,
   speechSlice,
@@ -321,6 +324,45 @@ describe('setVoiceConfig —— 音量系数', () => {
         await flush();
         assert.equal(sink.volumes[sink.volumes.length - 1], wanted, `音量 ${String(input)} 应收敛到 ${wanted}`);
       }
+    } finally {
+      restoreBrowser();
+      fetchStub.restore();
+    }
+  });
+});
+
+describe('speakAlert —— 推送气泡跟「语音播报」总开关走', () => {
+  test('桌面端 + 开关开 → 念一次；右键关掉后不再念', async () => {
+    const fetchStub = stubFetch();
+    const restoreBrowser = stubBrowser();
+    try {
+      setSurface('desktop');
+      setVoiceConfig('', true);
+      speakAlert('主人，虎妞说：晚饭好了');
+      await flush();
+      assert.deepEqual(fetchStub.calls, [{ text: '主人，虎妞说：晚饭好了' }]);
+      setVoiceEnabled(false);
+      assert.equal(isVoiceEnabled(), false);
+      speakAlert('主人，Hermes 需要你确认');
+      await flush();
+      assert.equal(fetchStub.calls.length, 1, '关掉朗读后推送只弹气泡');
+      setVoiceEnabled(true);
+      assert.equal(isVoiceEnabled(), true);
+    } finally {
+      restoreBrowser();
+      fetchStub.restore();
+    }
+  });
+
+  test('网页端不念推送（避免两端叠声）', async () => {
+    const fetchStub = stubFetch();
+    const restoreBrowser = stubBrowser();
+    try {
+      setSurface('web');
+      setVoiceConfig('', true);
+      speakAlert('主人，Windows 计划任务失败 · memwatch');
+      await flush();
+      assert.equal(fetchStub.calls.length, 0);
     } finally {
       restoreBrowser();
       fetchStub.restore();

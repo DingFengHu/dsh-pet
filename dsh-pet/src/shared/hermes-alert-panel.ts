@@ -17,13 +17,25 @@ function acknowledge(baseUrl: string, id: string): Promise<boolean> {
   return request;
 }
 
-/** 标题已带来源（Hermes 或虎妞）时不再加前缀，避免出现「Hermes · Hermes 需要你确认」。 */
-export function hermesTitle(title: string): string {
-  return /^(hermes(?![a-z])|虎妞)/i.test(title.trim()) ? title : `Hermes · ${title}`;
+/** 虎妞转发条目的宿主标题（与 host/hermes-policy.ts 的 HUNIU_TITLE 一致）。 */
+const HUNIU_TITLE = '虎妞';
+
+/**
+ * 气泡标题：用户 2026-11-06 要求统一为「主人，xxxx」，虎妞转发的消息为「主人，虎妞说：」。
+ * 标题已带来源（Hermes / Claude / Windows）时不再加「Hermes · 」前缀。只改显示，不改宿主快照与状态文件。
+ *
+ * @param title - 宿主给的原始标题。
+ * @param count - 同类提醒条数，大于 1 时在标题里标出。
+ */
+export function hermesTitle(title: string, count = 1): string {
+  const t = title.trim();
+  if (t === HUNIU_TITLE) return `主人，虎妞说${count > 1 ? `（${count} 条）` : ''}：`;
+  const sourced = /^(hermes|claude|windows)(?![a-z])/i.test(t) ? t : `Hermes · ${t}`;
+  return `主人，${sourced}${count > 1 ? ` (${count})` : ''}`;
 }
 
 /** 女仆风提醒气泡：奶油底、蓝色蕾丝虚线边、胶囊按钮，配大肥鱼的蓝白女仆装。
- *  字体不在这里指定，一律继承气泡的 --dsh-pet-font-family（默认随包软糖体），跟随用户的字体设置。
+ *  字体默认继承气泡的 --dsh-pet-font-family（默认随包软糖体）；唯独正文按用户 2026-11-06 要求改用系统正常字体，降低阅读成本。
  *  软糖体只有一个字重，强行加粗会被浏览器假粗体糊成一团，所以层级只靠字号和颜色区分。
  *  网页 .dsh-pet-bubble 与桌面 .pet-bubble 两端基础类不同，并列写；用 :has 识别装着本面板的气泡，
  *  不需要两端各自切换气泡类名。尺寸全部锚气泡字号 --f，随宠物大小与字号设置等比缩放。 */
@@ -36,7 +48,7 @@ export const HERMES_ALERT_CSS = [
   '.dsh-pet-hermes{max-height:16em;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;pointer-events:auto;',
   'display:flex;flex-direction:column;gap:calc(var(--f)*0.2);line-height:1.45}',
   '.dsh-pet-hermes-title{font-weight:400;font-size:calc(var(--f)*0.88);color:#24305e}',
-  '.dsh-pet-hermes-msg{font-size:calc(var(--f)*0.7);color:#2c3f86;white-space:pre-wrap;overflow-wrap:anywhere;max-height:calc(var(--f)*9);overflow-y:auto}',
+  '.dsh-pet-hermes-msg{font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;font-size:calc(var(--f)*0.7);color:#2c3f86;white-space:pre-wrap;overflow-wrap:anywhere;max-height:calc(var(--f)*9);overflow-y:auto}',
   '.dsh-pet-hermes-status{font-size:calc(var(--f)*0.62);color:#b5523b}',
   // 状态行是 aria-live 区，不能 display:none；空的时候只抵消 flex 间距。
   '.dsh-pet-hermes-status:empty{margin-top:calc(var(--f)*-0.2)}',
@@ -107,7 +119,7 @@ export function createHermesAlertPanel(options: { open: (url: string) => void; b
   }
   function paint(): void {
     if (!view || disposed) return;
-    title.textContent = `${hermesTitle(view.alert.title)}${view.count > 1 ? ` (${view.count})` : ''}`;
+    title.textContent = hermesTitle(view.alert.title, view.count);
     message.textContent = view.alert.message;
     // 用户 2026-11-06 要求：不再显示数据新鲜度提示，只留确认失败/等待同步。
     status.textContent = error || (acknowledgedId === view.alert.id ? '已确认，等待同步' : '');

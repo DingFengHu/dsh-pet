@@ -78,6 +78,13 @@ Object.assign(PetSprite.prototype, {
         this.bubble.appendChild(this.hermesPanel.el);
       }
       this.hermesPanel.update({ alert, stale: this.hermesAlerts.stale, count: this.hermesAlerts.alerts.length });
+      // 推送气泡朗读：每条提醒只念一次（换到新的一条才念），受「语音播报」总开关控制（共享层把关）。
+      if (!this.spokenAlertIds) this.spokenAlertIds = new Set();
+      if (!this.spokenAlertIds.has(alert.id)) {
+        this.spokenAlertIds.add(alert.id);
+        const head = S.hermesTitle(alert.title);
+        S.speakAlert(head + (/[：:。！？!?]$/.test(head) ? '' : '。') + alert.message);
+      }
       this.bubble.classList.remove('is-whisper', S.MEME_BUBBLE_CLASS);
       this.bubble.classList.add('is-on', 'is-clickable');
       window.__dshPetDebug.lastBubbleTitle = alert.title;

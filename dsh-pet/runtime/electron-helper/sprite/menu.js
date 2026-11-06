@@ -27,6 +27,8 @@ Object.assign(PetSprite.prototype, {
       },
       // 「待办事项」是待办面板的唯一入口（单击宠物不再弹面板）。
       { label: '待办事项', action: 'todo', hint: S.TODO_HOTKEY_HINT },
+      // 朗读开关：与设置页「语音播报」同一个配置键，推送气泡与待办朗读都受它控制。
+      { label: S.isVoiceEnabled() ? '朗读：开（点击关闭）' : '朗读：关（点击开启）', action: 'voice-toggle' },
     ];
     // 动作树之后是维护类：显示位置 → 重载配置 → 回到初始位置。
     const tail = [
@@ -86,6 +88,10 @@ Object.assign(PetSprite.prototype, {
     }
     if (leaf.action === 'todo') {
       this.toggleTodo(); // 打开待办面板（右键菜单入口）
+      return;
+    }
+    if (leaf.action === 'voice-toggle') {
+      this.toggleVoice();
       return;
     }
     if (leaf.action === 'home') {
@@ -171,6 +177,18 @@ Object.assign(PetSprite.prototype, {
     this.stopMove();
     this.customPos = null;
     this.position();
+  },
+
+  // 朗读开关：先写配置（POST /voice-enabled），成功后本窗口立即生效；不重启 Helper，宠物不闪。
+  // 写失败就不改本地状态，菜单下次打开仍显示真实值。
+  toggleVoice() {
+    const next = !S.isVoiceEnabled();
+    S.postAction(BASE + '/voice-enabled', { enabled: next })
+      .then((ok) => {
+        if (ok) S.setVoiceEnabled(next);
+        else console.warn('[dsh-pet] 朗读开关写入失败');
+      })
+      .catch((e) => console.warn('[dsh-pet] 朗读开关请求失败（宿主不可达？）', e));
   },
 
   // 「重载配置」菜单：请宿主重启桌面 Helper，与设置页「保存」同一条重启路径（宿主 POST /reload →

@@ -166,6 +166,30 @@ function clampVolume(value: unknown): number {
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
 }
 
+/** 当前播报总开关（右键菜单据此显示「朗读：开 / 关」）。 */
+export function isVoiceEnabled(): boolean {
+  return voiceEnabled;
+}
+
+/**
+ * 只改播报总开关（右键菜单切换后本窗口立即生效，不等 Helper 重启）；音色与音量不动。
+ * @param enabled - 新的总开关（严格 `=== true` 才算开启）。
+ */
+export function setVoiceEnabled(enabled: unknown): void {
+  voiceEnabled = enabled === true;
+}
+
+/**
+ * 推送气泡（Hermes / Claude / Windows / 虎妞）出现时念一句；受同一个播报总开关控制。
+ * 用户 2026-11-06 要求：推送也跟「语音播报」开关走，关掉就只弹气泡不出声。
+ * 只在桌面端念（推送气泡同时可能出现在网页端，两端都念会叠声）。
+ * @param text - 要念的整句（标题 + 正文），超长由 speechSlice 截断。
+ */
+export function speakAlert(text: string): void {
+  if (!text || surface !== 'desktop') return;
+  void speakIfEnabled(text);
+}
+
 /** 懒加载成品配置；失败按「不播」处理，且只试一次（避免每句都发请求）。 */
 async function loadConfigOnce(): Promise<void> {
   if (configLoaded) return;
