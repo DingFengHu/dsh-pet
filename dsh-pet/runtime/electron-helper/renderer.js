@@ -153,5 +153,13 @@ window.addEventListener('resize', () => {
   }
 });
 
+// 逐屏尺寸适配：小分辨率屏上按比例缩小（见 sprite/screen-fit.js）。低频轮询，空闲落定后才切换。
+const SCREEN_FIT_TICK_MS = 500;
+if (CONFIG.refScreenPx > 0) {
+  setInterval(() => {
+    for (const s of sprites) s.fitScreenScale();
+  }, SCREEN_FIT_TICK_MS);
+}
+
 injectAssets();
 void boot();
