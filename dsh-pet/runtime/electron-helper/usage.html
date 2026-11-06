@@ -4,34 +4,33 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src http://127.0.0.1:* http://localhost:*; img-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src file:; connect-src http://127.0.0.1:* http://localhost:*; img-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>AI 用量</title>
     <!--
-      AI 用量面板：Shift+左键点大肥鱼弹出（窗口见 main/usage-window.js）。
-      数据来自本机插件路由 /usage（地址经 ?api= 传入）；所有外部文本一律 textContent 写入，不拼 HTML。
-      面板可见时每 60 秒刷新，有来源在读取时 3 秒后再取一次；隐藏期间不发任何请求。
+      AI 用量面板「大肥鱼食堂 · 饭票小票」：Shift+左键点大肥鱼弹出（窗口见 main/usage-window.js）。
+      数据来自本机插件路由 /usage（地址经 ?api= 传入）；外部文本一律 textContent 写入，不拼 HTML。
+      小票高度随内容变化，渲染后经 document.title「usage:<高度>」告诉主进程收紧窗口，不留空白。
+      尾巴朝向与高度由主进程按鱼身位置经 window.__usagePlace(side, y) 设置。
     -->
     <style>
+      @font-face {
+        font-family: 'Ruantang';
+        src: url('../../assets/fonts/上首软糖体.ttf') format('truetype');
+        font-display: block;
+      }
       :root {
-        color-scheme: dark;
-        --abyss: #0a1019;
-        --panel: #0d1521;
-        --raise: rgba(255, 255, 255, 0.035);
-        --raise-hi: rgba(255, 255, 255, 0.06);
-        --line: rgba(148, 178, 214, 0.12);
-        --line-hi: rgba(148, 178, 214, 0.22);
-        --text: #e8eef6;
-        --soft: #a9b6c7;
-        --mute: #6c7b8f;
-        --fish: #5fb4ff;
-        --codex: #4fd1a5;
-        --claude: #f08a5d;
-        --deepseek: #7d9cff;
-        --warn: #f2b65a;
-        --bad: #f0706a;
-        --num: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Variable Display', 'Segoe UI', sans-serif;
-        --ui: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
+        --navy: #24305e;
+        --navy2: #2c3f86;
+        --ink: #5b6488;
+        --mute: #9aa3c2;
+        --cream: #fffaf2;
+        --lace: #b9c2e4;
+        --dot: #cfd6ee;
+        --blue: #5a7fd6;
+        --rose: #d9604f;
+        --amber: #c98a1e;
+        --tail-y: 70px;
       }
       * {
         box-sizing: border-box;
@@ -39,106 +38,104 @@
       html,
       body {
         margin: 0;
-        height: 100%;
         background: transparent;
         overflow: hidden;
-        font: 12.5px/1.45 var(--ui);
-        color: var(--text);
-        -webkit-font-smoothing: antialiased;
         user-select: none;
+        font-family: 'Ruantang', 'Microsoft YaHei UI', sans-serif;
+        color: var(--navy);
+        -webkit-font-smoothing: antialiased;
       }
-      .panel {
-        position: absolute;
-        inset: 6px;
-        display: flex;
-        flex-direction: column;
-        border-radius: 18px;
-        background:
-          radial-gradient(120% 60% at 0% 0%, rgba(95, 180, 255, 0.1), transparent 60%),
-          radial-gradient(90% 50% at 100% 100%, rgba(79, 209, 165, 0.06), transparent 60%), var(--panel);
-        border: 1px solid var(--line-hi);
-        box-shadow:
-          0 18px 40px rgba(0, 0, 0, 0.45),
-          inset 0 1px 0 rgba(255, 255, 255, 0.05);
-        overflow: hidden;
-        animation: rise 0.18s ease-out;
+      /* 窗口左右各留 14px 给尾巴与阴影，上 8px、下 12px */
+      .wrap {
+        position: relative;
+        margin: 8px 14px 18px;
+        filter: drop-shadow(0 4px 8px rgba(20, 28, 60, 0.3));
+        animation: pop 0.16s ease-out;
       }
-      @keyframes rise {
+      @keyframes pop {
         from {
           opacity: 0;
-          transform: translateY(6px) scale(0.985);
+          transform: translateY(4px) scale(0.98);
         }
       }
-
-      /* ---------- 头部（可拖动） ---------- */
-      header {
-        -webkit-app-region: drag;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 14px 14px 12px 18px;
-        border-bottom: 1px solid var(--line);
+      /* 尾巴：指向鱼身 */
+      .tail {
+        position: absolute;
+        top: var(--tail-y);
+        width: 0;
+        height: 0;
+        border: 9px solid transparent;
       }
-      .title {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        flex: 1;
-        min-width: 0;
+      .side-left .tail {
+        left: -15px;
+        border-right: 9px solid var(--cream);
+        border-left-width: 6px;
       }
-      .title h1 {
-        margin: 0;
-        font-size: 15px;
-        font-weight: 650;
-        letter-spacing: 0.3px;
+      .side-right .tail {
+        right: -15px;
+        border-left: 9px solid var(--cream);
+        border-right-width: 6px;
       }
-      .title .dot {
-        width: 7px;
+      .receipt {
+        position: relative;
+        background: var(--cream);
+        padding: 14px 16px 14px;
+        border-radius: 8px 8px 0 0;
+        box-shadow: 0 0 0 1px rgba(36, 48, 94, 0.08);
+      }
+      /* 小票撕口：下沿垂一排奶油色圆齿（不挖孔，背后桌面颜色不影响观感） */
+      .receipt::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -7px;
         height: 7px;
-        border-radius: 50%;
-        background: var(--fish);
-        box-shadow: 0 0 10px var(--fish);
-        align-self: center;
+        background: radial-gradient(circle at 9px 0, var(--cream) 6.5px, transparent 7px) 0 0 / 18px 7px repeat-x;
       }
-      .title .dot.busy {
-        animation: pulse 1s ease-in-out infinite;
+      .top {
+        position: relative;
+        text-align: center;
+        -webkit-app-region: drag;
       }
-      @keyframes pulse {
-        50% {
-          opacity: 0.35;
-        }
+      .logo {
+        font-size: 19px;
+        line-height: 1.2;
       }
-      #updated {
+      .logo small {
+        display: block;
+        font-size: 10.5px;
         color: var(--mute);
-        font-size: 11px;
-        white-space: nowrap;
+        letter-spacing: 2px;
+        margin-top: 2px;
       }
-      .icon {
+      .btn {
         -webkit-app-region: no-drag;
-        width: 28px;
-        height: 28px;
-        display: grid;
-        place-items: center;
+        position: absolute;
+        top: -4px;
+        width: 22px;
+        height: 22px;
         border: 0;
-        border-radius: 8px;
+        border-radius: 50%;
         background: transparent;
-        color: var(--soft);
+        color: var(--mute);
+        font:
+          15px/22px 'Ruantang',
+          sans-serif;
         cursor: pointer;
-        transition: background 0.12s;
+        padding: 0;
       }
-      .icon:hover {
-        background: var(--raise-hi);
-        color: var(--text);
+      .btn:hover {
+        background: #eef1fa;
+        color: var(--navy2);
       }
-      .icon:disabled {
-        opacity: 0.4;
-        cursor: default;
+      .btn.refresh {
+        left: -6px;
       }
-      .icon svg {
-        width: 15px;
-        height: 15px;
+      .btn.close {
+        right: -6px;
       }
-      .icon.spin svg {
+      .btn.spin {
         animation: spin 0.9s linear infinite;
       }
       @keyframes spin {
@@ -146,341 +143,157 @@
           transform: rotate(360deg);
         }
       }
-
-      /* ---------- 正文 ---------- */
-      main {
-        flex: 1;
-        overflow-y: auto;
-        padding: 14px 14px 10px;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(148, 178, 214, 0.2) transparent;
+      .cut {
+        border-top: 2px dashed var(--lace);
+        margin: 10px -4px 8px;
       }
-      main::-webkit-scrollbar {
-        width: 6px;
-      }
-      main::-webkit-scrollbar-thumb {
-        background: rgba(148, 178, 214, 0.18);
-        border-radius: 3px;
-      }
-      .label {
-        display: flex;
-        justify-content: space-between;
-        margin: 2px 4px 8px;
-        color: var(--mute);
+      .sec {
         font-size: 10.5px;
-        letter-spacing: 1.6px;
-        text-transform: uppercase;
+        color: var(--blue);
+        letter-spacing: 3px;
+        margin: 8px 0 2px;
       }
-      section + section {
-        margin-top: 16px;
-      }
-
-      /* 订阅额度：两张卡 */
-      .plans {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-      .plan {
+      .ln {
         position: relative;
-        padding: 12px 12px 11px;
-        border-radius: 14px;
-        background: var(--raise);
-        border: 1px solid var(--line);
-        overflow: hidden;
-      }
-      .plan::before {
-        content: '';
-        position: absolute;
-        inset: 0 0 auto 0;
-        height: 2px;
-        background: var(--brand);
-        opacity: 0.85;
-      }
-      .plan .head {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px;
-      }
-      .brand {
-        font-weight: 650;
-        font-size: 12.5px;
-        color: var(--brand);
-      }
-      .badge {
-        font: 600 9.5px/1 var(--ui);
-        letter-spacing: 0.8px;
-        padding: 3px 6px;
-        border-radius: 5px;
-        color: var(--soft);
-        background: var(--raise-hi);
-      }
-      .big {
-        margin-top: 8px;
-        font: 600 38px/1 var(--num);
-        letter-spacing: -1px;
-        font-variant-numeric: tabular-nums;
-      }
-      .big small {
-        font-size: 17px;
-        margin-left: 2px;
-        color: var(--soft);
-        letter-spacing: 0;
-      }
-      .sub {
-        color: var(--mute);
-        font-size: 11px;
-        margin-top: 3px;
-      }
-      .win {
-        margin-top: 10px;
-      }
-      .win .row {
-        display: flex;
-        justify-content: space-between;
         align-items: baseline;
-        font-size: 11px;
-        color: var(--soft);
+        gap: 6px;
+        font-size: 13.5px;
+        line-height: 1.35;
+        padding: 3px 0 0;
       }
-      .win .row b {
-        font: 600 12px var(--num);
-        color: var(--text);
+      .ln .dots {
+        flex: 1;
+        min-width: 12px;
+        border-bottom: 2px dotted var(--dot);
+        transform: translateY(-4px);
+      }
+      .ln b {
+        font-weight: 400;
+        color: var(--navy2);
         font-variant-numeric: tabular-nums;
+        white-space: nowrap;
       }
-      .bar {
-        height: 4px;
-        margin-top: 4px;
-        border-radius: 2px;
-        background: rgba(148, 178, 214, 0.1);
-        overflow: hidden;
+      .ln b.low {
+        color: var(--amber);
       }
-      .bar i {
-        display: block;
-        height: 100%;
-        width: 0;
-        border-radius: 2px;
-        background: var(--tone, var(--brand));
-        transition: width 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+      .ln b.out {
+        color: var(--rose);
       }
-      .reset {
-        margin-top: 3px;
-        font-size: 10.5px;
-        color: var(--mute);
-      }
-
-      /* API 额度：可展开行 */
-      .api {
-        border-radius: 14px;
-        background: var(--raise);
-        border: 1px solid var(--line);
-        overflow: hidden;
-      }
-      .api + .api {
-        margin-top: 8px;
-      }
-      .api > button {
-        all: unset;
-        display: block;
-        width: 100%;
-        box-sizing: border-box;
-        padding: 11px 12px 10px 14px;
+      .ln.click {
         cursor: pointer;
       }
-      .api > button:hover {
-        background: rgba(255, 255, 255, 0.02);
+      .ln.click:hover > span:first-child {
+        color: var(--blue);
       }
-      .api > button:focus-visible {
-        outline: 1px solid var(--fish);
-        outline-offset: -1px;
-        border-radius: 14px;
-      }
-      .api .top {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-      }
-      .api .name {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        flex: 1;
-        min-width: 0;
-        font-weight: 600;
-        color: var(--text);
-      }
-      .api .name::before {
-        content: '';
-        width: 6px;
-        height: 6px;
-        border-radius: 2px;
-        background: var(--brand);
-        flex: none;
-      }
-      .api .money {
-        font: 600 20px/1 var(--num);
-        font-variant-numeric: tabular-nums;
-      }
-      .api .money small {
-        font-size: 12px;
+      .ln .chev {
+        font-size: 10px;
         color: var(--mute);
-        margin-left: 3px;
       }
-      .api .meta {
-        display: flex;
-        justify-content: space-between;
-        gap: 8px;
-        margin-top: 5px;
+      .note {
         font-size: 10.5px;
         color: var(--mute);
+        text-align: right;
+        line-height: 1.35;
+        margin-top: 1px;
       }
-      .chev {
-        width: 10px;
-        height: 10px;
-        color: var(--mute);
-        transition: transform 0.15s;
-        align-self: center;
+      .note.warn {
+        color: var(--rose);
+        text-align: left;
+        user-select: text;
       }
-      .api.open .chev {
-        transform: rotate(90deg);
+      .stamp {
+        position: absolute;
+        right: 30px;
+        top: -5px;
+        transform: rotate(-12deg);
+        border: 2px solid var(--rose);
+        color: var(--rose);
+        border-radius: 7px;
+        padding: 0 6px;
+        font-size: 13px;
+        line-height: 1.35;
+        opacity: 0.85;
+        pointer-events: none;
+        background: rgba(255, 250, 242, 0.7);
       }
       .keys {
-        display: none;
-        padding: 2px 12px 10px 14px;
-        border-top: 1px dashed var(--line);
-      }
-      .api.open .keys {
-        display: block;
+        margin: 3px 0 2px 10px;
       }
       .key {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 2px 10px;
-        padding: 7px 0 6px;
-      }
-      .key + .key {
-        border-top: 1px solid rgba(148, 178, 214, 0.06);
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        font-size: 11.5px;
+        color: var(--ink);
+        padding-top: 2px;
       }
       .key .kn {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: var(--soft);
+        max-width: 150px;
       }
-      .key .kc {
-        font: 600 12.5px var(--num);
-        font-variant-numeric: tabular-nums;
-        text-align: right;
+      .key .dots {
+        flex: 1;
+        min-width: 8px;
+        border-bottom: 1.5px dotted #dfe3f2;
+        transform: translateY(-3px);
       }
-      .key .kd {
-        grid-column: 1 / -1;
-        font-size: 10.5px;
+      .key.kd {
+        font-size: 10px;
         color: var(--mute);
+        padding: 0 0 1px 2px;
       }
-      .key .share {
-        grid-column: 1 / -1;
-        height: 2px;
-        border-radius: 1px;
-        background: rgba(148, 178, 214, 0.08);
-        overflow: hidden;
-      }
-      .key .share i {
-        display: block;
-        height: 100%;
-        background: var(--brand);
-        opacity: 0.55;
-      }
-      .idle {
-        padding-top: 6px;
-        font-size: 10.5px;
-        color: var(--mute);
-      }
-
-      .note {
-        margin-top: 6px;
-        font-size: 10.5px;
-        line-height: 1.4;
-        color: var(--warn);
-        user-select: text;
-      }
-      .note.bad {
-        color: var(--bad);
-      }
-      .skeleton {
-        color: transparent !important;
-        background: linear-gradient(
-          90deg,
-          rgba(148, 178, 214, 0.07),
-          rgba(148, 178, 214, 0.15),
-          rgba(148, 178, 214, 0.07)
-        );
-        background-size: 200% 100%;
-        border-radius: 6px;
-        animation: shimmer 1.2s linear infinite;
-      }
-      @keyframes shimmer {
-        to {
-          background-position: -200% 0;
-        }
-      }
-      footer {
-        padding: 9px 18px 12px;
-        border-top: 1px solid var(--line);
+      .tot {
         display: flex;
         justify-content: space-between;
-        color: var(--mute);
-        font-size: 10.5px;
+        align-items: baseline;
+        font-size: 15px;
       }
-      kbd {
-        font: 600 10px var(--ui);
-        padding: 1px 5px;
-        border-radius: 4px;
-        border: 1px solid var(--line-hi);
-        color: var(--soft);
+      .tot b {
+        font-weight: 400;
+        color: var(--rose);
+        font-variant-numeric: tabular-nums;
+      }
+      .foot {
+        margin-top: 6px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        color: var(--mute);
+      }
+      .wait {
+        color: var(--mute);
+        animation: blink 1s ease-in-out infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0.35;
+        }
       }
       @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before {
+        * {
           animation: none !important;
-          transition: none !important;
         }
       }
     </style>
   </head>
   <body>
-    <div class="panel" role="dialog" aria-label="AI 用量">
-      <header>
-        <div class="title">
-          <span class="dot" id="dot"></span>
-          <h1>AI 用量</h1>
-          <span id="updated">正在读取…</span>
+    <div class="wrap side-left" id="wrap">
+      <span class="tail"></span>
+      <div class="receipt" role="dialog" aria-label="AI 用量">
+        <div class="top">
+          <button class="btn refresh" id="refresh" type="button" title="立即刷新" aria-label="立即刷新">↻</button>
+          <div class="logo">大肥鱼食堂<small id="sub">AI 饭票小票</small></div>
+          <button class="btn close" id="close" type="button" title="收起（Esc）" aria-label="收起">×</button>
         </div>
-        <button class="icon" id="refresh" type="button" title="立即刷新" aria-label="立即刷新">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-            <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" />
-            <path d="M13.5 2.5v3h-3" />
-          </svg>
-        </button>
-        <button class="icon" id="close" type="button" title="关闭（Esc）" aria-label="关闭">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-            <path d="M4 4l8 8M12 4l-8 8" />
-          </svg>
-        </button>
-      </header>
-      <main>
-        <section>
-          <div class="label"><span>订阅额度</span><span>纽约时间</span></div>
-          <div class="plans" id="plans"></div>
-        </section>
-        <section>
-          <div class="label"><span>API 额度</span><span>本期</span></div>
-          <div id="apis"></div>
-        </section>
-      </main>
-      <footer>
-        <span><kbd>Shift</kbd> + 点大肥鱼 开关</span>
-        <span><kbd>Esc</kbd> 关闭</span>
-      </footer>
+        <div class="cut"></div>
+        <div id="body"></div>
+        <div class="cut"></div>
+        <div class="tot"><span>本期吃掉</span><b id="total">…</b></div>
+        <div class="foot"><span>Shift + 点鱼 收起</span><span id="time"></span></div>
+      </div>
     </div>
 
     <script>
@@ -505,265 +318,167 @@
       });
 
       /** 建元素：只用 textContent 写文本。 */
-      function h(tag, attrs, ...kids) {
+      function h(tag, cls, ...kids) {
         const el = document.createElement(tag);
-        for (const [k, v] of Object.entries(attrs || {})) {
-          if (v === undefined || v === null || v === false) continue;
-          if (k === 'class') el.className = v;
-          else if (k === 'style') el.setAttribute('style', v);
-          else el.setAttribute(k, v === true ? '' : v);
-        }
-        for (const kid of kids.flat())
-          if (kid !== null && kid !== undefined && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+        if (cls) el.className = cls;
+        for (const k of kids.flat())
+          if (k !== null && k !== undefined && k !== false) el.append(k instanceof Node ? k : String(k));
         return el;
       }
-      const bar = (pct, tone) =>
-        h(
-          'div',
-          { class: 'bar' },
-          h('i', { style: `width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%;${tone ? `--tone:${tone}` : ''}` }),
-        );
-      const tone = (pct) => (pct <= 10 ? 'var(--bad)' : pct <= 25 ? 'var(--warn)' : null);
-      const pctText = (n) => (Math.round(n * 10) / 10).toString();
       const usd = (n) => '$' + (Math.abs(n) >= 1000 ? Math.round(n).toLocaleString('en-US') : n.toFixed(2));
       const usdSmall = (n) => (n === 0 ? '$0' : n < 0.01 ? '<$0.01' : usd(n));
+      const pct = (n) => Math.round(n * 10) / 10 + '%';
       const compact = (n) =>
-        n >= 1e9
-          ? (n / 1e9).toFixed(2) + 'B'
-          : n >= 1e6
-            ? (n / 1e6).toFixed(2) + 'M'
-            : n >= 1e3
-              ? (n / 1e3).toFixed(1) + 'K'
-              : String(Math.round(n));
+        n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(Math.round(n));
+      const level = (p) => (p <= 0.5 ? 'out' : p <= 20 ? 'low' : '');
       function until(ms) {
         const min = Math.round((ms - Date.now()) / 60000);
-        if (min <= 0) return '即将重置';
+        if (min <= 0) return '马上补货';
         const d = Math.floor(min / 1440),
-          hr = Math.floor((min % 1440) / 60),
-          m = min % 60;
-        return d ? `${d} 天 ${hr} 小时后` : hr ? `${hr} 小时 ${m} 分后` : `${m} 分钟后`;
+          hr = Math.floor((min % 1440) / 60);
+        return d ? `${d} 天 ${hr} 小时后补货` : hr ? `${hr} 小时后补货` : `${min} 分钟后补货`;
       }
       function ago(ms) {
         const s = Math.round((Date.now() - ms) / 1000);
         return s < 45 ? '刚刚' : s < 3600 ? `${Math.round(s / 60)} 分钟前` : `${Math.round(s / 3600)} 小时前`;
       }
-      /** 来源级提示：失败但有旧数据 → 黄色；从未成功 → 红色；正在首次读取 → 无。 */
-      function note(src, extra) {
-        const msgs = [];
-        if (src.error) msgs.push(src.data ? `${src.error}（显示${ago(src.okAt)}的数据）` : src.error);
-        if (extra) msgs.push(extra);
-        return msgs.length ? h('div', { class: 'note' + (src.data ? '' : ' bad') }, msgs.join(' · ')) : null;
-      }
 
-      // ---------------------------------------------------------------- 订阅额度卡
-      function planCard(name, color, src) {
-        const d = src.data;
-        const card = h('div', { class: 'plan', style: `--brand:${color}` });
-        const badge = d && d.plan ? h('span', { class: 'badge' }, d.plan.toUpperCase()) : null;
-        card.append(h('div', { class: 'head' }, h('span', { class: 'brand' }, name), badge));
-        if (!d) {
-          if (src.error) card.append(h('div', { class: 'big' }, '—'), note(src));
-          else card.append(h('div', { class: 'big skeleton' }, '00%'), h('div', { class: 'sub skeleton' }, '读取中'));
-          return card;
-        }
-        const main = d.weekly || d.fiveHour;
-        card.append(
-          h(
-            'div',
-            { class: 'big', style: tone(main.remainingPercent) ? `color:${tone(main.remainingPercent)}` : '' },
-            pctText(main.remainingPercent),
-            h('small', {}, '%'),
-          ),
-          h('div', { class: 'sub' }, d.weekly ? '本周剩余' : '5 小时剩余'),
+      /** 一行：名字 …… 数值。value 为 null 时显示读取中。 */
+      function line(name, value, cls, extra) {
+        const ln = h(
+          'div',
+          'ln',
+          h('span', null, name),
+          h('span', 'dots'),
+          value === null ? h('b', 'wait', '…') : h('b', cls || '', value),
         );
-        for (const [label, w] of [
-          ['周额度', d.weekly],
-          ['5 小时', d.fiveHour],
-        ]) {
-          if (!w) continue;
-          card.append(
-            h(
-              'div',
-              { class: 'win' },
-              h('div', { class: 'row' }, h('span', {}, label), h('b', {}, pctText(w.remainingPercent) + '%')),
-              bar(w.remainingPercent, tone(w.remainingPercent)),
-              h(
-                'div',
-                { class: 'reset' },
-                w.resetsAt
-                  ? `${until(w.resetsAt * 1000)}重置 · ${fmtDate.format(new Date(w.resetsAt * 1000))}`
-                  : '重置时间未知',
-              ),
-            ),
-          );
-        }
-        const live = d.liveError ? `实时读取失败，显示${ago(d.updatedAt)}的记录` : null;
-        const n = note(src, live);
-        if (n) card.append(n);
-        return card;
+        if (extra) ln.append(extra);
+        return ln;
+      }
+      /** 来源出错：有旧数据说明数据时间，没有就直接给原因。 */
+      function warn(src, extra) {
+        const parts = [];
+        if (src.error) parts.push(src.data ? `${src.error}（显示${ago(src.okAt)}的）` : src.error);
+        if (extra) parts.push(extra);
+        return parts.length ? h('div', 'note warn', parts.join(' · ')) : null;
       }
 
-      // ---------------------------------------------------------------- API 额度行
-      const openState = {};
-      function apiRow(id, name, color, src, render) {
-        const row = h('div', { class: 'api' + (openState[id] ? ' open' : ''), style: `--brand:${color}` });
+      function planBlock(name, src) {
         const d = src.data;
-        const btn = h('button', { type: 'button', 'aria-expanded': openState[id] ? 'true' : 'false' });
-        const chev = h('span', { class: 'chev' });
-        chev.innerHTML =
-          '<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 1.5 7 5l-3.5 3.5"/></svg>';
-        if (!d) {
-          btn.append(
-            h(
-              'div',
-              { class: 'top' },
-              h('span', { class: 'name' }, name),
-              src.error ? h('span', { class: 'money' }, '—') : h('span', { class: 'money skeleton' }, '$000.00'),
-            ),
-          );
-          const n = note(src);
-          if (n) btn.append(n);
-          row.append(btn);
-          return row;
-        }
-        const r = render(d);
-        btn.append(
-          h('div', { class: 'top' }, h('span', { class: 'name' }, name), r.money, r.keys ? chev : null),
-          r.bar,
-          h('div', { class: 'meta' }, ...r.meta),
-        );
-        const n = note(src, r.extra);
-        if (n) btn.append(n);
-        row.append(btn);
-        if (r.keys) {
-          row.append(r.keys);
-          btn.addEventListener('click', () => {
-            openState[id] = !openState[id];
-            row.classList.toggle('open', openState[id]);
-            btn.setAttribute('aria-expanded', openState[id] ? 'true' : 'false');
-          });
-        } else btn.style.cursor = 'default';
-        return row;
+        if (!d) return [line(name + ' 周', src.error ? '—' : null, 'out'), warn(src)];
+        const w = d.weekly || d.fiveHour;
+        const label = d.weekly ? ' 周' : ' 5h';
+        const stamp = w.remainingPercent <= 0.5 ? h('span', 'stamp', '吃光啦') : null;
+        const out = [line(name + label, pct(w.remainingPercent), level(w.remainingPercent), stamp)];
+        const notes = [];
+        if (w.resetsAt) notes.push(`${fmtDate.format(new Date(w.resetsAt * 1000))} · ${until(w.resetsAt * 1000)}`);
+        if (d.weekly && d.fiveHour) notes.push(`5h 剩 ${pct(d.fiveHour.remainingPercent)}`);
+        if (notes.length) out.push(h('div', 'note', notes.join(' · ')));
+        out.push(warn(src, d.liveError ? `实时没读到，显示${ago(d.updatedAt)}的` : null));
+        return out;
       }
 
+      const open = {};
       function keyList(keys) {
         const used = keys.filter((k) => k.costUsd > 0 || k.requests > 0).sort((a, b) => b.costUsd - a.costUsd);
+        const box = h('div', 'keys');
+        for (const k of used) {
+          box.append(h('div', 'key', h('span', 'kn', k.name), h('span', 'dots'), h('span', null, usdSmall(k.costUsd))));
+          box.append(h('div', 'key kd', `${k.requests.toLocaleString('en-US')} 次 · ${compact(k.tokens)} tokens`));
+        }
         const idle = keys.length - used.length;
-        const max = Math.max(...used.map((k) => k.costUsd), 0.000001);
-        const box = h('div', { class: 'keys' });
-        for (const k of used)
-          box.append(
-            h(
-              'div',
-              { class: 'key' },
-              h('span', { class: 'kn', title: k.project ? `${k.name} · ${k.project}` : k.name }, k.name),
-              h('span', { class: 'kc' }, usdSmall(k.costUsd)),
-              h(
-                'span',
-                { class: 'kd' },
-                `${k.requests.toLocaleString('en-US')} 次请求 · ${compact(k.tokens)} tokens${k.project ? ' · ' + k.project : ''}`,
-              ),
-              h('div', { class: 'share' }, h('i', { style: `width:${((k.costUsd / max) * 100).toFixed(1)}%` })),
-            ),
-          );
-        if (!used.length) box.append(h('div', { class: 'idle' }, '本期还没有 Key 产生用量'));
-        if (idle) box.append(h('div', { class: 'idle' }, `另有 ${idle} 个 Key 本期未使用`));
+        if (!used.length) box.append(h('div', 'key kd', '本期还没人动筷'));
+        if (idle) box.append(h('div', 'key kd', `另有 ${idle} 个 Key 没动筷`));
         return box;
       }
-
-      function creditRender(d) {
-        const hasGrant = typeof d.grantUsd === 'number' && d.grantUsd > 0 && typeof d.remainingUsd === 'number';
-        const pct = hasGrant ? (d.remainingUsd / d.grantUsd) * 100 : 0;
-        const meta = [h('span', {}, `本期已用 ${usd(d.totalCostUsd)}`)];
-        if (d.nextResetAt) {
-          const exp = d.expiringUsd
-            ? `${fmtDay.format(new Date(d.nextResetAt))} 到期 ${usd(d.expiringUsd)}`
-            : `${fmtDay.format(new Date(d.nextResetAt))} 到期`;
-          meta.push(h('span', {}, exp));
-        }
-        return {
-          money: hasGrant
-            ? h(
-                'span',
-                { class: 'money', style: tone(pct) ? `color:${tone(pct)}` : '' },
-                usd(d.remainingUsd),
-                h('small', {}, '/ ' + usd(d.grantUsd)),
-              )
-            : h('span', { class: 'money' }, usd(d.totalCostUsd)),
-          bar: hasGrant ? bar(pct, tone(pct)) : null,
-          meta,
-          keys: keyList(d.keys || []),
-          extra: d.creditError
-            ? `赠送额度未刷新：${d.creditError}`
-            : d.creditSource === 'config'
-              ? '赠送额度为估算值'
-              : null,
-        };
+      function cardBlock(id, name, src) {
+        const d = src.data;
+        if (!d) return [line(name, src.error ? '—' : null, 'out'), warn(src)];
+        const has = typeof d.grantUsd === 'number' && d.grantUsd > 0 && typeof d.remainingUsd === 'number';
+        const p = has ? (d.remainingUsd / d.grantUsd) * 100 : 100;
+        const ln = line(name, has ? usd(d.remainingUsd) : usd(d.totalCostUsd), level(p));
+        const chev = h('span', 'chev', open[id] ? ' ▾' : ' ▸');
+        ln.firstChild.append(chev);
+        ln.classList.add('click');
+        ln.title = '点开看每个 Key';
+        const keys = keyList(d.keys || []);
+        keys.hidden = !open[id];
+        ln.addEventListener('click', () => {
+          open[id] = !open[id];
+          keys.hidden = !open[id];
+          chev.textContent = open[id] ? ' ▾' : ' ▸';
+          report();
+        });
+        const notes = [];
+        if (has) notes.push(`共 ${usd(d.grantUsd)}`);
+        if (d.nextResetAt)
+          notes.push(
+            d.expiringUsd
+              ? `${fmtDay.format(new Date(d.nextResetAt))} 先过期 ${usd(d.expiringUsd)}`
+              : `${fmtDay.format(new Date(d.nextResetAt))} 到期`,
+          );
+        const extra = d.creditError
+          ? `赠送额度没刷新：${d.creditError}`
+          : d.creditSource === 'config'
+            ? '赠送额度是估算'
+            : null;
+        return [ln, notes.length ? h('div', 'note', notes.join(' · ')) : null, keys, warn(src, extra)];
       }
-
-      function deepseekRender(d) {
+      function deepseekBlock(src) {
+        const d = src.data;
+        if (!d) return [line('DeepSeek', src.error ? '—' : null, 'out'), warn(src)];
         const b = d.balances.find((x) => x.currency === 'USD') || d.balances[0];
         const sym = b.currency === 'CNY' ? '¥' : '$';
-        const scale = Math.max(100, b.total);
-        return {
-          money: h(
-            'span',
-            { class: 'money', style: b.total < 5 ? 'color:var(--bad)' : b.total < 20 ? 'color:var(--warn)' : '' },
-            sym + b.total.toFixed(2),
-          ),
-          bar: bar((b.total / scale) * 100, b.total < 5 ? 'var(--bad)' : b.total < 20 ? 'var(--warn)' : null),
-          meta: [
-            h('span', {}, `充值 ${sym}${b.toppedUp.toFixed(2)} · 赠送 ${sym}${b.granted.toFixed(2)}`),
-            h('span', {}, d.available ? '可用' : '余额不足'),
-          ],
-          keys: null,
-          extra: null,
-        };
+        return [
+          line('DeepSeek', sym + b.total.toFixed(2), b.total < 5 ? 'out' : b.total < 20 ? 'low' : ''),
+          h('div', 'note', `充值 ${sym}${b.toppedUp.toFixed(2)} · 赠送 ${sym}${b.granted.toFixed(2)}`),
+          warn(src),
+        ];
       }
 
-      // ---------------------------------------------------------------- 拉取与渲染
       let snap = null;
       let visible = true;
       let timer = 0;
       let inflight = false;
+      let lastH = 0;
 
-      function render() {
-        if (!snap) return;
-        $('plans').replaceChildren(
-          planCard('Codex', 'var(--codex)', snap.codex),
-          planCard('Claude', 'var(--claude)', snap.claude),
-        );
-        $('apis').replaceChildren(
-          apiRow('codexApi', 'Codex API', 'var(--codex)', snap.codexApi, creditRender),
-          apiRow('claudeApi', 'Claude API', 'var(--claude)', snap.claudeApi, creditRender),
-          apiRow('deepseek', 'DeepSeek', 'var(--deepseek)', snap.deepseek, deepseekRender),
-        );
-        const busy = ['codex', 'claude', 'codexApi', 'claudeApi', 'deepseek'].some((k) => snap[k].refreshing);
-        $('dot').classList.toggle('busy', busy);
-        $('updated').textContent = busy ? '正在更新…' : '更新于 ' + fmtTime.format(new Date(snap.generatedAt));
-        return busy;
+      /** 把小票实际高度告诉主进程，窗口按它收紧。 */
+      function report() {
+        requestAnimationFrame(() => {
+          const need = Math.ceil($('wrap').getBoundingClientRect().bottom + 18);
+          if (need !== lastH) {
+            lastH = need;
+            document.title = 'usage:' + need;
+          }
+        });
       }
 
-      function skeleton() {
-        const empty = { data: null, error: null, refreshing: true, okAt: null };
-        snap = {
-          codex: empty,
-          claude: empty,
-          codexApi: empty,
-          claudeApi: empty,
-          deepseek: empty,
-          generatedAt: Date.now(),
-        };
-        render();
+      function render() {
+        const s = snap;
+        const rows = [
+          h('div', 'sec', '· 订阅 ·'),
+          ...planBlock('Codex', s.codex),
+          ...planBlock('Claude', s.claude),
+          h('div', 'sec', '· 饭卡 ·'),
+          ...cardBlock('codexApi', 'Codex API', s.codexApi),
+          ...cardBlock('claudeApi', 'Claude API', s.claudeApi),
+          ...deepseekBlock(s.deepseek),
+        ];
+        $('body').replaceChildren(...rows.filter(Boolean));
+        const spent = [s.codexApi.data, s.claudeApi.data].filter(Boolean).reduce((t, d) => t + d.totalCostUsd, 0);
+        $('total').textContent = s.codexApi.data || s.claudeApi.data ? usd(spent) : '…';
+        const busy = ['codex', 'claude', 'codexApi', 'claudeApi', 'deepseek'].some((k) => s[k].refreshing);
+        $('sub').textContent = busy ? 'AI 饭票小票 · 正在对账…' : 'AI 饭票小票';
+        $('time').textContent = s.generatedAt ? '纽约 ' + fmtTime.format(new Date(s.generatedAt)) : '';
+        report();
+        return busy;
       }
 
       async function load(force) {
         if (inflight || !API) return;
         inflight = true;
         clearTimeout(timer);
-        const btn = $('refresh');
-        btn.disabled = true;
-        btn.classList.add('spin');
+        $('refresh').classList.add('spin');
         let again = 60000;
         try {
           const res = await fetch(API + (force ? '?refresh=1' : ''), {
@@ -774,19 +489,17 @@
           if (!res.ok || body.ok === false) throw new Error(body.message || `HTTP ${res.status}`);
           snap = body;
           if (render()) again = 3000;
-        } catch (error) {
-          $('updated').textContent = '本机服务暂不可用';
-          $('dot').classList.remove('busy');
+        } catch {
+          $('sub').textContent = 'AI 饭票小票 · 本机服务暂不可用';
           again = 15000;
         } finally {
           inflight = false;
-          btn.disabled = false;
-          btn.classList.remove('spin');
+          $('refresh').classList.remove('spin');
           if (visible) timer = setTimeout(() => load(false), again);
         }
       }
 
-      // 主进程在显示 / 隐藏时调用
+      // 主进程调用：显示 / 隐藏 / 摆放
       window.__usageShown = () => {
         visible = true;
         load(false);
@@ -795,9 +508,17 @@
         visible = false;
         clearTimeout(timer);
       };
+      window.__usagePlace = (side, tailY) => {
+        $('wrap').className = 'wrap side-' + (side === 'right' ? 'right' : 'left');
+        // tailY 是窗口内的 CSS 纵坐标（鱼身瞄准点），换成 .wrap 内尾巴顶端
+        $('wrap').style.setProperty('--tail-y', Math.max(14, Math.round(tailY - 8 - 9)) + 'px');
+      };
       $('refresh').addEventListener('click', () => load(true));
       $('close').addEventListener('click', () => window.close());
-      skeleton();
+      const empty = { data: null, error: null, refreshing: true, okAt: null };
+      snap = { codex: empty, claude: empty, codexApi: empty, claudeApi: empty, deepseek: empty, generatedAt: 0 };
+      render();
+      document.fonts.ready.then(report);
       load(false);
     </script>
   </body>
