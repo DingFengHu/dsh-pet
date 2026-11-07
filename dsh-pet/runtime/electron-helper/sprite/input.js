@@ -262,6 +262,7 @@ Object.assign(PetSprite.prototype, {
   },
 
   syncInputRegions() {
+    this.fitAlertBubble();
     if (!window.petBridge || !window.petBridge.setInputRegions) return;
     const rects = [];
     // 控件矩形 = 主进程允许接收点击的区域，矩形外继续穿透。可点的余额气泡悬在余量区，不登记就点不到。
