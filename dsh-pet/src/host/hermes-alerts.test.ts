@@ -303,6 +303,53 @@ test('外部提醒确认后不占用永久 dismissed，会话回话清掉该会�
   }
 });
 
+test('DSH inbox 端到端：来源、持久化去重、本地确认与 resolved 来源隔离', async () => {
+  const { drainInbox } = await import('./pet-inbox.ts');
+  const { externalSink } = await import('./hermes-alerts.ts');
+  const { mkdir } = await import('node:fs/promises');
+  const { dir, file, state, alerts } = await fixture();
+  const inbox = join(dir, 'inbox');
+  await mkdir(inbox);
+  try {
+    const event = {
+      v: 1,
+      source: 'dsh',
+      kind: 'decision',
+      key: 'ask:s1:tu1',
+      title: '需要确认',
+      text: 'DSH 问题',
+      session: 's1',
+      at: 100,
+    };
+    await writeFile(join(inbox, 'event.json'), JSON.stringify(event));
+    assert.equal(await drainInbox(inbox, externalSink(alerts), 200), 1);
+    assert.equal(await alerts.pushExternal(ext(event)), 'duplicate');
+    const reloaded = createHermesAlerts({ file, state, petId: () => 'main' });
+    await reloaded.initialize();
+    assert.equal(await reloaded.pushExternal(ext(event)), 'duplicate');
+    assert.equal(view(state).alerts[0]!.title, 'DSH · 需要确认');
+    assert.equal(view(state).alerts[0]!.url, undefined);
+    await reloaded.pushExternal(ext());
+    await reloaded.pushExternal(ext({ ...event, key: 'later', at: 500 }));
+    await reloaded.pushExternal(ext({ ...event, key: 'other', session: 's2' }));
+    await reloaded.pushExternal(ext({ ...event, key: 'fail', kind: 'task-failed' }));
+    await writeFile(
+      join(inbox, 'event.json'),
+      JSON.stringify({ ...event, kind: 'resolved', title: '', text: '', at: 200 }),
+    );
+    assert.equal(await drainInbox(inbox, externalSink(reloaded), 200), 1);
+    assert.equal(view(state).alerts.length, 4);
+    assert.equal(await reloaded.resolveExternal('claude', 's1', 200), 1);
+    assert.equal(view(state).alerts.length, 3);
+    const failure = view(state).alerts.find((a) => a.id.startsWith('hermes-dsh-fail-'))!;
+    assert.equal(await reloaded.ack(failure.id), true);
+    assert.equal(view(state).alerts.length, 2);
+    assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).dismissed, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('外部提醒写盘失败不发布、不吞事件', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-hermes-'));
   try {

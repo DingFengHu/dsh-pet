@@ -20,7 +20,7 @@ const line = z.string().max(200);
 export const inboxEventSchema = z
   .object({
     v: z.literal(1),
-    source: z.enum(['claude', 'windows']),
+    source: z.enum(['claude', 'windows', 'dsh']),
     kind: z.enum(['decision', 'task-failed', 'resolved']),
     key: z.string().min(1).max(400),
     title: line,

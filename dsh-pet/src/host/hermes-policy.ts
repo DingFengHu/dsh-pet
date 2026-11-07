@@ -11,7 +11,9 @@ const storedId = z
   .max(256)
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/);
 /** 本地提醒标识只接受完整哈希。 */
-export const alertId = z.string().regex(/^hermes-(decision|cron|huniu|claude|claude-fail|win-fail)-[a-f0-9]{64}$/);
+export const alertId = z
+  .string()
+  .regex(/^hermes-(decision|cron|huniu|claude|claude-fail|win-fail|dsh|dsh-fail)-[a-f0-9]{64}$/);
 /** 跨进程快照只保留提醒所需投影，数组均有上限。 */
 export const snapshotSchema = z.object({
   profiles: z.array(z.object({ name: profile, available: z.boolean(), baseUrl: text.optional() })).max(32),
@@ -65,8 +67,8 @@ const hermesPendingSchema = z
     sessionId: storedId.optional(),
   })
   .strict();
-/** 收件目录来的外部提醒：Claude 等你决定 / 定时任务失败、Windows 计划任务失败。 */
-export const EXTERNAL_KINDS = ['claude', 'claude-fail', 'win-fail'] as const;
+/** 收件目录来的外部提醒：Claude / DSH 等你决定或任务失败、Windows 计划任务失败。 */
+export const EXTERNAL_KINDS = ['claude', 'claude-fail', 'win-fail', 'dsh', 'dsh-fail'] as const;
 export type ExternalKind = (typeof EXTERNAL_KINDS)[number];
 const externalPendingSchema = z
   .object({
@@ -107,7 +109,16 @@ function validSession(value: string | null | undefined): string | undefined {
   return typeof value === 'string' && storedId.safeParse(value).success ? value : undefined;
 }
 
-const KIND_ORDER = { decision: 0, claude: 1, huniu: 2, cron: 3, 'claude-fail': 4, 'win-fail': 4 } as const;
+const KIND_ORDER = {
+  decision: 0,
+  claude: 1,
+  dsh: 1,
+  huniu: 2,
+  cron: 3,
+  'claude-fail': 4,
+  'win-fail': 4,
+  'dsh-fail': 4,
+} as const;
 
 /** 外部提醒（Claude、Windows）只经本地确认或会话回话消失，不进 Hermes 快照折叠。 */
 export function isExternalKind(kind: string): kind is ExternalKind {
