@@ -131,6 +131,16 @@ test('深链仅允许 default profile 与安全 stored ID，持久化旧行也�
   assert.equal(alertView({ ...entry, sessionId: 'valid_ID-123' }).url, 'hermes://open/valid_ID-123');
 });
 
+test('DSH 提醒的查看对话固定打开 dsh://open，Claude / Windows 提醒仍无链接', () => {
+  const base = { profile: 'default' as const, title: 't', message: 'm', at: 1, session: 'session-x' };
+  for (const kind of ['dsh', 'dsh-fail'] as const) {
+    assert.equal(alertView({ ...base, id: makeAlertId(kind, ['dsh', 'k']), kind }).url, 'dsh://open');
+  }
+  for (const kind of ['claude', 'claude-fail', 'win-fail'] as const) {
+    assert.equal(alertView({ ...base, id: makeAlertId(kind, ['x', 'k']), kind }).url, undefined);
+  }
+});
+
 test('首次基线 tombstone 达到上限时 fail closed，不截断旧 tombstone', () => {
   const previous = {
     ...disk(),

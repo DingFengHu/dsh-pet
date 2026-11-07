@@ -9,7 +9,11 @@ test('链接白名单拒绝执行协议、凭据、畸形编码与多段 Hermes 
   for (const url of [
     'javascript:alert(1)',
     'file:///secret',
-    'dsh://open',
+    'dsh://open/',
+    'dsh://open/session-1',
+    'dsh://open?session=x',
+    'dsh://other',
+    'DSH://open',
     'https://user:pass@example.test',
     'hermes://open/a/b',
     'hermes://open/id?cmd=x',
@@ -25,6 +29,7 @@ test('链接白名单拒绝执行协议、凭据、畸形编码与多段 Hermes 
     assert.equal(safeHermesUrl(url), undefined, String(url));
   }
   assert.equal(safeHermesUrl('hermes://open/a%2Fb%20c'), 'hermes://open/a%2Fb%20c');
+  assert.equal(safeHermesUrl('dsh://open'), 'dsh://open');
   assert.equal(
     safeHermesUrl('https://example.test/#/profiles/local/sessions/a'),
     'https://example.test/#/profiles/local/sessions/a',

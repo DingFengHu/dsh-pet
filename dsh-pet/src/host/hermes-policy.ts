@@ -78,7 +78,7 @@ const externalPendingSchema = z
     title: z.string().min(1).max(200),
     message: z.string().min(1).max(4096),
     at: z.number().finite(),
-    /** 生产者会话 id，只用于“用户已回话”时清掉该会话的决定，不生成链接。 */
+    /** 生产者会话 id，只用于“用户已回话”时清掉该会话的决定，不拼进链接（DSH 提醒固定打开 `dsh://open`）。 */
     session: z.string().max(128).optional(),
   })
   .strict();
@@ -242,7 +242,14 @@ export function alertView(entry: HermesDisk['pending'][number]): {
   url?: string;
 } {
   const sessionId = 'sessionId' in entry ? validSession(entry.sessionId) : undefined;
-  const url = sessionId && entry.profile === 'default' ? `hermes://open/${encodeURIComponent(sessionId)}` : undefined;
+  // DSH 提醒的“查看对话”：DSH 没有按会话的深链（Windows 上任何 dsh:// 都只聚焦主窗口），
+  // 所以固定打开 DSH 主窗口；气泡标题已带会话名，用户在侧栏点开即可。
+  const url =
+    entry.kind === 'dsh' || entry.kind === 'dsh-fail'
+      ? 'dsh://open'
+      : sessionId && entry.profile === 'default'
+        ? `hermes://open/${encodeURIComponent(sessionId)}`
+        : undefined;
   return {
     id: entry.id,
     title: entry.title,

@@ -328,7 +328,8 @@ test('DSH inbox 端到端：来源、持久化去重、本地确认与 resolved 
     await reloaded.initialize();
     assert.equal(await reloaded.pushExternal(ext(event)), 'duplicate');
     assert.equal(view(state).alerts[0]!.title, 'DSH · 需要确认');
-    assert.equal(view(state).alerts[0]!.url, undefined);
+    // Hermes 退役阶段 4（2026-11-07 授权）：DSH 提醒的“查看对话”打开 DSH 主窗口。
+    assert.equal(view(state).alerts[0]!.url, 'dsh://open');
     await reloaded.pushExternal(ext());
     await reloaded.pushExternal(ext({ ...event, key: 'later', at: 500 }));
     await reloaded.pushExternal(ext({ ...event, key: 'other', session: 's2' }));
