@@ -11,7 +11,9 @@ const storedId = z
   .max(256)
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/);
 /** 本地提醒标识只接受完整哈希。 */
-export const alertId = z.string().regex(/^hermes-(decision|cron|huniu|claude|claude-fail|win-fail)-[a-f0-9]{64}$/);
+export const alertId = z
+  .string()
+  .regex(/^hermes-(decision|cron|huniu|claude|claude-fail|win-fail|dsh|dsh-fail)-[a-f0-9]{64}$/);
 /** 跨进程快照只保留提醒所需投影，数组均有上限。 */
 export const snapshotSchema = z.object({
   profiles: z.array(z.object({ name: profile, available: z.boolean(), baseUrl: text.optional() })).max(32),
@@ -65,8 +67,8 @@ const hermesPendingSchema = z
     sessionId: storedId.optional(),
   })
   .strict();
-/** 收件目录来的外部提醒：Claude 等你决定 / 定时任务失败、Windows 计划任务失败。 */
-export const EXTERNAL_KINDS = ['claude', 'claude-fail', 'win-fail'] as const;
+/** 收件目录来的外部提醒：Claude / DSH 等你决定或任务失败、Windows 计划任务失败。 */
+export const EXTERNAL_KINDS = ['claude', 'claude-fail', 'win-fail', 'dsh', 'dsh-fail'] as const;
 export type ExternalKind = (typeof EXTERNAL_KINDS)[number];
 const externalPendingSchema = z
   .object({
@@ -76,7 +78,7 @@ const externalPendingSchema = z
     title: z.string().min(1).max(200),
     message: z.string().min(1).max(4096),
     at: z.number().finite(),
-    /** 生产者会话 id，只用于“用户已回话”时清掉该会话的决定，不生成链接。 */
+    /** 生产者会话 id，只用于“用户已回话”时清掉该会话的决定，不拼进链接（DSH 提醒固定打开 `dsh://open`）。 */
     session: z.string().max(128).optional(),
   })
   .strict();
@@ -107,7 +109,16 @@ function validSession(value: string | null | undefined): string | undefined {
   return typeof value === 'string' && storedId.safeParse(value).success ? value : undefined;
 }
 
-const KIND_ORDER = { decision: 0, claude: 1, huniu: 2, cron: 3, 'claude-fail': 4, 'win-fail': 4 } as const;
+const KIND_ORDER = {
+  decision: 0,
+  claude: 1,
+  dsh: 1,
+  huniu: 2,
+  cron: 3,
+  'claude-fail': 4,
+  'win-fail': 4,
+  'dsh-fail': 4,
+} as const;
 
 /** 外部提醒（Claude、Windows）只经本地确认或会话回话消失，不进 Hermes 快照折叠。 */
 export function isExternalKind(kind: string): kind is ExternalKind {
@@ -231,7 +242,14 @@ export function alertView(entry: HermesDisk['pending'][number]): {
   url?: string;
 } {
   const sessionId = 'sessionId' in entry ? validSession(entry.sessionId) : undefined;
-  const url = sessionId && entry.profile === 'default' ? `hermes://open/${encodeURIComponent(sessionId)}` : undefined;
+  // DSH 提醒的“查看对话”：DSH 没有按会话的深链（Windows 上任何 dsh:// 都只聚焦主窗口），
+  // 所以固定打开 DSH 主窗口；气泡标题已带会话名，用户在侧栏点开即可。
+  const url =
+    entry.kind === 'dsh' || entry.kind === 'dsh-fail'
+      ? 'dsh://open'
+      : sessionId && entry.profile === 'default'
+        ? `hermes://open/${encodeURIComponent(sessionId)}`
+        : undefined;
   return {
     id: entry.id,
     title: entry.title,

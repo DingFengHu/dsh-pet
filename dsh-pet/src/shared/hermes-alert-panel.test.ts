@@ -9,6 +9,7 @@ test('标题统一以「老大，」开头，已带来源时不重复 Hermes 前
   assert.equal(hermesTitle('Hermes 定时任务失败', 2), '老大，Hermes 定时任务失败 (2)');
   assert.equal(hermesTitle('Claude 等你批准 · dsh-pet'), '老大，Claude 等你批准 · dsh-pet');
   assert.equal(hermesTitle('Windows 计划任务失败 · memwatch'), '老大，Windows 计划任务失败 · memwatch');
+  assert.equal(hermesTitle('DSH · 需要确认'), '老大，DSH · 需要确认');
   assert.equal(hermesTitle('任务失败'), '老大，Hermes · 任务失败');
 });
 

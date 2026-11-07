@@ -351,10 +351,12 @@ test('原生 IPC 白名单仅打开安全 Hermes/网页，不调用 DSH 或执�
     'file:///x',
     'https://name:pass@example.test',
     'hermes://open/a/b',
+    'dsh://open/session-1',
     alert.url,
     'https://example.test/#/session',
+    'dsh://open',
   ]) {
     handlers.get('pet:open-hermes')({ sender: {} }, { url });
   }
-  assert.deepEqual(opened, [alert.url, 'https://example.test/#/session']);
+  assert.deepEqual(opened, [alert.url, 'https://example.test/#/session', 'dsh://open']);
 });

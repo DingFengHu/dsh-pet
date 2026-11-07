@@ -21,8 +21,8 @@ function acknowledge(baseUrl: string, id: string): Promise<boolean> {
 const HUNIU_TITLE = '虎妞';
 
 /**
- * 气泡标题：用户 2026-11-06 要求统一为「老大，xxxx」（原「主人」，同日先改「虎哥」，再改「老大」），虎妞转发的消息为「老大，虎妞说：」。
- * 标题已带来源（Hermes / Claude / Windows）时不再加「Hermes · 」前缀。只改显示，不改宿主快照与状态文件。
+ * 气泡标题：沿用当前版本的「老大，xxxx」，虎妞转发的消息为「老大，虎妞说：」。
+ * 标题已带来源（Hermes / Claude / Windows / DSH）时不再加「Hermes · 」前缀。只改显示，不改宿主快照与状态文件。
  *
  * @param title - 宿主给的原始标题。
  * @param count - 同类提醒条数，大于 1 时在标题里标出。
@@ -30,7 +30,7 @@ const HUNIU_TITLE = '虎妞';
 export function hermesTitle(title: string, count = 1): string {
   const t = title.trim();
   if (t === HUNIU_TITLE) return `老大，虎妞说${count > 1 ? `（${count} 条）` : ''}：`;
-  const sourced = /^(hermes|claude|windows)(?![a-z])/i.test(t) ? t : `Hermes · ${t}`;
+  const sourced = /^(hermes|claude|windows|dsh)(?![a-z])/i.test(t) ? t : `Hermes · ${t}`;
   return `老大，${sourced}${count > 1 ? ` (${count})` : ''}`;
 }
 

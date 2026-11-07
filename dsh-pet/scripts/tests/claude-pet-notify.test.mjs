@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { handle, scheduledTaskName, toEvent } from '../claude-pet-notify.mjs';
+import { conversationTitle, handle, scheduledTaskName, toEvent } from '../claude-pet-notify.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../claude-pet-notify.mjs', import.meta.url));
 const base = { session_id: 's1', cwd: 'D:\\Projects\\dsh-pet', transcript_path: '/nope' };
@@ -28,10 +28,64 @@ function transcript(firstUser) {
   return file;
 }
 
-test('AskUserQuestion 变成 decision，带问题原文和项目名', () => {
+function titledTranscript(...rows) {
+  const file = transcript('普通请求');
+  writeFileSync(file, rows.map((row) => (typeof row === 'string' ? row : JSON.stringify(row))).join('\n'));
+  return file;
+}
+
+const titleRow = (customTitle, sessionId = base.session_id) => ({ type: 'custom-title', customTitle, sessionId });
+
+test('从真实 custom-title schema 取当前会话最新名称，忽略其他会话和坏行', () => {
+  const file = titledTranscript(
+    titleRow('旧名称'),
+    titleRow('新的对话名称'),
+    titleRow('别的会话', 'other'),
+    { type: 'user', sessionId: 's1', message: { content: '不拿用户原文充当标题' } },
+    { type: 'custom-title', sessionId: 's1', customTitle: 123 },
+    '{"type":"custom-title",',
+  );
+  assert.equal(conversationTitle({ ...base, transcript_path: file }), '新的对话名称');
+});
+
+test('无标题、文件不可读、session 不匹配或缺失均显示未命名，不用项目或猜测的 payload 字段', () => {
+  for (const input of [
+    base,
+    { ...base, transcript_path: transcript('普通请求') },
+    { ...base, transcript_path: titledTranscript(titleRow('他人对话', 'other')) },
+    { ...base, transcript_path: titledTranscript(titleRow('真实名称')), session_id: undefined },
+    { ...base, transcript_path: undefined, title: '猜测字段', session_title: '猜测字段' },
+    { ...base, transcript_path: titledTranscript(titleRow('旧名称'), titleRow('  \n ')) },
+  ]) {
+    assert.equal(conversationTitle(input), '未命名');
+  }
+});
+
+test('标题在 256 KiB 之外仍能读到，不被长消息截断', () => {
+  const file = titledTranscript(titleRow('较早命名'), {
+    type: 'assistant',
+    message: { content: 'x'.repeat(300 * 1024) },
+  });
+  assert.equal(conversationTitle({ ...base, transcript_path: file }), '较早命名');
+});
+
+test('跨块的 UTF-8 标题保持完整，清理空白并限制显示长度', () => {
+  const row = JSON.stringify(titleRow('中文对话'));
+  const split = Buffer.byteLength(row.slice(0, row.indexOf('中'))) + 1;
+  const file = titledTranscript(row, 'x'.repeat(64 * 1024 - (Buffer.byteLength(row) - split) - 1));
+  assert.equal(conversationTitle({ ...base, transcript_path: file }), '中文对话');
+  const long = titledTranscript(titleRow(`  标题\n\t${'名'.repeat(200)}  `));
+  const title = conversationTitle({ ...base, transcript_path: long });
+  assert.equal(title.length, 160);
+  assert.ok(title.startsWith('标题 名'));
+  assert.ok(title.endsWith('…'));
+});
+
+test('AskUserQuestion 变成 decision，带问题原文和真实对话名', () => {
   const e = toEvent(
     {
       ...base,
+      transcript_path: titledTranscript(titleRow('修复通知标题')),
       hook_event_name: 'PreToolUse',
       tool_name: 'AskUserQuestion',
       tool_use_id: 'tu1',
@@ -42,16 +96,23 @@ test('AskUserQuestion 变成 decision，带问题原文和项目名', () => {
   );
   assert.equal(e.kind, 'decision');
   assert.equal(e.text, '用哪个方案？\n要部署吗？');
-  assert.match(e.title, /dsh-pet$/);
+  assert.equal(e.title, 'Claude 中“修复通知标题”的这个任务需要你决定');
   assert.equal(e.key, 'ask:s1:tu1');
 });
 
 test('wrap_up 只有带 ask 才提醒', () => {
-  const pre = { ...base, hook_event_name: 'PreToolUse', tool_name: 'mcp__ccd_turn__wrap_up', tool_use_id: 'w1' };
+  const pre = {
+    ...base,
+    transcript_path: titledTranscript(titleRow('继续完善通知')),
+    hook_event_name: 'PreToolUse',
+    tool_name: 'mcp__ccd_turn__wrap_up',
+    tool_use_id: 'w1',
+  };
   assert.equal(toEvent({ ...pre, tool_input: { recap: '做完了' } }, 1, noTask), null);
   const e = toEvent({ ...pre, tool_input: { recap: '做完了', ask: '按方案开工吗？' } }, 1, noTask);
   assert.equal(e.kind, 'decision');
   assert.equal(e.text, '按方案开工吗？\n做完了');
+  assert.equal(e.title, 'Claude 中“继续完善通知”的这个任务需要你回复');
 });
 
 test('只有 permission_prompt 通知才提醒', () => {
@@ -70,6 +131,14 @@ test('只有 permission_prompt 通知才提醒', () => {
     noTask,
   );
   assert.equal(e.kind, 'decision');
+  assert.equal(e.title, 'Claude 中“未命名”的这个任务需要你批准');
+  const named = toEvent({
+    ...base,
+    transcript_path: titledTranscript(titleRow('权限检查')),
+    hook_event_name: 'Notification',
+    notification_type: 'permission_prompt',
+  });
+  assert.equal(named.title, 'Claude 中“权限检查”的这个任务需要你批准');
 });
 
 test('StopFailure 只在定时任务会话里算失败', () => {
@@ -133,6 +202,7 @@ test('作为 hook 运行：坏输入也 exit 0 且不输出', () => {
   const ok = spawnSync(process.execPath, [SCRIPT], {
     input: JSON.stringify({
       ...base,
+      transcript_path: titledTranscript(titleRow('端到端标题')),
       hook_event_name: 'PreToolUse',
       tool_name: 'AskUserQuestion',
       tool_use_id: 'z',
@@ -144,6 +214,8 @@ test('作为 hook 运行：坏输入也 exit 0 且不输出', () => {
   assert.equal(ok.status, 0);
   assert.equal(ok.stdout.length, 0);
   assert.equal(events(inbox).length, 1);
+  assert.equal(events(inbox)[0].title, 'Claude 中“端到端标题”的这个任务需要你决定');
+  assert.equal(events(inbox)[0].source, 'claude');
   assert.ok(existsSync(join(inbox, 'open')));
 });
 

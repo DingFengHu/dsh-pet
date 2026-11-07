@@ -26,6 +26,7 @@ import type { ExternalAlertSink, InboxEvent } from './pet-inbox.ts';
 /** 收件事件映射到提醒类别。 */
 function externalKind(event: InboxEvent): ExternalKind {
   if (event.source === 'windows') return 'win-fail';
+  if (event.source === 'dsh') return event.kind === 'decision' ? 'dsh' : 'dsh-fail';
   return event.kind === 'decision' ? 'claude' : 'claude-fail';
 }
 
@@ -221,7 +222,10 @@ export function createHermesAlerts(options: HermesAlertsOptions) {
                 id,
                 profile: 'default',
                 kind,
-                title: event.title.slice(0, 200),
+                title: (event.source === 'dsh' && !/^dsh(?![a-z])/i.test(event.title)
+                  ? `DSH · ${event.title}`
+                  : event.title
+                ).slice(0, 200),
                 message: (event.text.trim() || '（无详情）').slice(0, 4096),
                 at: event.at,
                 ...(event.session ? { session: event.session } : {}),
@@ -232,14 +236,14 @@ export function createHermesAlerts(options: HermesAlertsOptions) {
         publish();
         return 'shown';
       }),
-    /** 用户已在该 Claude 会话回话：清掉该会话在回话之前的决定提醒，返回清掉的条数。 */
+    /** 用户已在该 Claude / DSH 会话回话：清掉该会话在回话之前的决定提醒，返回清掉的条数。 */
     resolveExternal: (source: InboxEvent['source'], session: string, at: number): Promise<number> =>
       run(async () => {
         if (stopped) throw new Error('stopped');
         await load();
-        if (source !== 'claude') return 0;
+        if (source !== 'claude' && source !== 'dsh') return 0;
         const keep = disk!.pending.filter(
-          (entry) => !(entry.kind === 'claude' && entry.session === session && entry.at <= at),
+          (entry) => !(entry.kind === source && entry.session === session && entry.at <= at),
         );
         const removed = disk!.pending.length - keep.length;
         if (removed) {

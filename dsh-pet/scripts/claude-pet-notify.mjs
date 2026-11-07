@@ -13,6 +13,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
   existsSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -42,10 +43,50 @@ function readStdin() {
   }
 }
 
-/** 会话可读名：项目目录名。 */
-function where(input) {
-  const cwd = typeof input.cwd === 'string' ? input.cwd : '';
-  return cwd ? basename(cwd.replace(/[\\/]+$/, '')) : 'Claude';
+/** 本机 transcript 的 custom-title 记录；同一会话最后一次命名生效，不把项目名当对话名。 */
+export function conversationTitle(input) {
+  if (typeof input.transcript_path !== 'string' || typeof input.session_id !== 'string' || !input.session_id) {
+    return '未命名';
+  }
+  const titleFrom = (line) => {
+    try {
+      const row = JSON.parse(line);
+      if (row?.type === 'custom-title' && row.sessionId === input.session_id && typeof row.customTitle === 'string') {
+        return clip(row.customTitle.replace(/\s+/g, ' '), 160) || '未命名';
+      }
+    } catch {
+      // 忽略坏行和异步写入尚未完成的末行。
+    }
+    return null;
+  };
+  try {
+    const fd = openSync(input.transcript_path, 'r');
+    try {
+      // 从尾部分块找最新标题，避免把大型 transcript 整个载入内存；跨块 UTF-8 在完整行上解码。
+      let end = fstatSync(fd).size;
+      let rest = Buffer.alloc(0);
+      while (end > 0) {
+        const start = Math.max(0, end - 64 * 1024);
+        const buf = Buffer.alloc(end - start);
+        const n = readSync(fd, buf, 0, buf.length, start);
+        const data = Buffer.concat([buf.subarray(0, n), rest]);
+        let lineEnd = data.length;
+        for (let i = data.length - 1; i >= 0; i--) {
+          if (data[i] !== 10) continue;
+          const title = titleFrom(data.subarray(i + 1, lineEnd).toString('utf8'));
+          if (title) return title;
+          lineEnd = i;
+        }
+        rest = data.subarray(0, lineEnd);
+        end = start;
+      }
+      return titleFrom(rest.toString('utf8')) || '未命名';
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return '未命名';
+  }
 }
 
 /**
@@ -96,7 +137,7 @@ export function toEvent(input, now = Date.now(), resolveTask = scheduledTaskName
   const event = input.hook_event_name;
   const session = typeof input.session_id === 'string' ? input.session_id.slice(0, 128) : undefined;
   const at = now;
-  const place = where(input);
+  const place = () => conversationTitle(input);
   if (event === 'PreToolUse' && input.tool_name === 'AskUserQuestion') {
     const qs = Array.isArray(input.tool_input?.questions) ? input.tool_input.questions : [];
     const text = qs
@@ -107,7 +148,7 @@ export function toEvent(input, now = Date.now(), resolveTask = scheduledTaskName
     return {
       kind: 'decision',
       key: `ask:${session}:${input.tool_use_id ?? text}`,
-      title: `Claude 要你做决定 · ${place}`,
+      title: `Claude 中“${place()}”的这个任务需要你决定`,
       text,
       session,
       at,
@@ -120,7 +161,7 @@ export function toEvent(input, now = Date.now(), resolveTask = scheduledTaskName
     return {
       kind: 'decision',
       key: `wrap:${session}:${input.tool_use_id ?? ask}`,
-      title: `Claude 等你回复 · ${place}`,
+      title: `Claude 中“${place()}”的这个任务需要你回复`,
       text: recap ? `${ask}\n${recap}` : ask,
       session,
       at,
@@ -128,7 +169,14 @@ export function toEvent(input, now = Date.now(), resolveTask = scheduledTaskName
   }
   if (event === 'Notification' && input.notification_type === 'permission_prompt') {
     const text = clip(input.message || '有一个操作等你批准');
-    return { kind: 'decision', key: `perm:${session}:${now}`, title: `Claude 等你批准 · ${place}`, text, session, at };
+    return {
+      kind: 'decision',
+      key: `perm:${session}:${now}`,
+      title: `Claude 中“${place()}”的这个任务需要你批准`,
+      text,
+      session,
+      at,
+    };
   }
   // 回答完 AskUserQuestion（PostToolUse）与用户发新消息一样，算已处理。
   if (event === 'UserPromptSubmit' || (event === 'PostToolUse' && input.tool_name === 'AskUserQuestion')) {
