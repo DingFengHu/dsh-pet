@@ -132,6 +132,27 @@
       .pet-bubble.is-on {
         opacity: 1;
       }
+      .pet-bubble.is-fitted-alert {
+        position: fixed;
+        left: var(--alert-left, 0px);
+        top: var(--alert-top, 0px);
+        bottom: auto;
+        transform: none;
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: min(calc(var(--f) * 17.6), var(--pet-size), var(--alert-width));
+      }
+      .pet-bubble.is-fitted-alert > .dsh-pet-hermes {
+        max-height: min(16em, var(--alert-content-height));
+      }
+      .pet-bubble.is-fitted-alert::after {
+        left: var(--alert-tail-x);
+      }
+      .pet-bubble.is-fitted-alert.is-below:has(> .dsh-pet-hermes)::after {
+        top: calc(var(--f) * -0.3736);
+        bottom: auto;
+        transform: translateX(-50%) rotate(180deg);
+      }
       /* 碎碎念变体：与浏览器 overlay 一致 —— 字号缩到余额气泡的 0.75、宽度下限更窄（0.10 → 2.1978），
          上限与余额气泡相同；宽度取宽/折行规则继承 .pet-bubble，高度随行数自然增长 */
       .pet-bubble.is-whisper {

@@ -215,7 +215,9 @@ async function native(t) {
   const app = await open(t, snapshot([]));
   await app.page.evaluate(() => {
     window.__dshPetDebug = {};
-    window.PetSprite = class {};
+    window.CONFIG = { isWindowClampedToWorkArea: false };
+    window.VIEW = { x: 0, y: 0, w: 1920, h: 1080 };
+    window.WORK_AREAS = [{ x: 0, y: 0, width: 1920, height: 1040 }];
     window.sprites = [];
     window.STATE_URL = location.origin + '/native-state';
     window.STATE_WAIT_MS = 20000;
@@ -234,7 +236,9 @@ async function native(t) {
       requestKeyboardFocus: () => {},
     };
   });
-  for (const file of ['sprite/input.js', 'sprite/bubble.js', 'events.js'])
+  await app.page.setViewportSize({ width: 880, height: 782 });
+  await app.page.addStyleTag({ content: nativeFile('index.html').match(/<style>([\s\S]*?)<\/style>/)[1] });
+  for (const file of ['sprite.js', 'sprite/window-fit.js', 'sprite/input.js', 'sprite/bubble.js', 'events.js'])
     await app.page.addScriptTag({ content: nativeFile(file) });
   await app.page.evaluate(() => {
     const sprite = Object.create(PetSprite.prototype);
@@ -247,13 +251,27 @@ async function native(t) {
       dragState: { active: false },
       menuItems: [],
       inputRegionElements: new Set(),
-      inputRegionResize: { observe() {}, unobserve() {} },
       workSessionId: 'wrong-dsh-session',
+      size: 440,
+      winH: 268,
+      halfW: 220,
+      halfH: 123.75,
+      margin: { l: 220, r: 220, t: 294, b: 220 },
+      pos: { x: 600, y: 400 },
+      winOffset: { x: 220, y: 294 },
+      hitRect: { x: 137.5, y: 55, w: 165, h: 196 },
+      el: document.createElement('div'),
+      reportWindow() {},
+      markPoseDirty() {},
     });
+    sprite.inputRegionResize = new ResizeObserver(() => sprite.syncInputRegions());
+    sprite.el.className = 'pet-sprite';
+    sprite.el.style.cssText =
+      'left:220px;top:294px;width:440px;height:247.5px;--pet-size:440px;--dsh-pet-font-bubble:20px';
     sprite.bubble.className = 'pet-bubble';
-    sprite.bubble.style.cssText = 'display:block;width:300px;min-height:30px';
     sprite.bubble.addEventListener('pointerdown', () => window.wrongFocus++);
-    document.body.appendChild(sprite.bubble);
+    sprite.el.appendChild(sprite.bubble);
+    document.body.appendChild(sprite.el);
     window.nativeSprite = sprite;
     sprites.push(sprite);
   });
@@ -323,6 +341,97 @@ test('原生首拉、输入 busy/矩形和两按钮事件路径，pending 防重
   assert.equal(await app.page.evaluate(() => window.busy), false);
 });
 
+test('通知在四边、挂边、多屏和小屏内完整摆放，移动后命中区同步', async (t) => {
+  const app = await native(t);
+  await app.page.evaluate((alert) => {
+    nativeSprite.hermesAlerts = { petId: 'blue', alerts: [alert], stale: false };
+    nativeSprite.renderBubble();
+  }, alert);
+  for (const [x, y] of [
+    [-200, -100],
+    [1680, -100],
+    [-200, 900],
+    [1680, 900],
+    [-200, 400],
+    [1680, 400],
+    [600, -100],
+    [600, 900],
+    [600, 400],
+  ]) {
+    const result = await app.page.evaluate(
+      ([x, y]) => {
+        nativeSprite.sendBounds(x, y);
+        const rect = nativeSprite.bubble.getBoundingClientRect().toJSON();
+        const bounds = nativeSprite.visibleClampRect();
+        nativeSprite.syncInputRegions();
+        return {
+          rect,
+          bounds,
+          repeated: nativeSprite.bubble.getBoundingClientRect().toJSON(),
+          region: regions.rects[0],
+        };
+      },
+      [x, y],
+    );
+    const { rect, bounds } = result;
+    assert.ok(rect.left >= bounds.x && rect.top >= bounds.y, `左上边界 ${x},${y}`);
+    assert.ok(rect.right <= bounds.x + bounds.w && rect.bottom <= bounds.y + bounds.h, `右下边界 ${x},${y}`);
+    assert.deepEqual(result.repeated, rect, '重复布局不能振荡');
+    assert.deepEqual(result.region, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+  }
+  await app.page.evaluate(() => {
+    nativeSprite.sendBounds(1680, -100);
+    nativeSprite.el.style.setProperty('--dsh-pet-font-bubble', '36px');
+  });
+  await app.page.waitForFunction(() => {
+    const rect = nativeSprite.bubble.getBoundingClientRect();
+    const bounds = nativeSprite.visibleClampRect();
+    return (
+      rect.right <= bounds.x + bounds.w &&
+      rect.bottom <= bounds.y + bounds.h &&
+      regions.rects[0].width === rect.width &&
+      regions.rects[0].height === rect.height
+    );
+  });
+  await app.page.evaluate(() => {
+    VIEW.x = -1920;
+    VIEW.y = -200;
+    WORK_AREAS = [
+      { x: 0, y: 200, width: 1920, height: 1040 },
+      { x: 1920, y: 0, width: 360, height: 300 },
+    ];
+    toScreen = (value) => value * 1.5;
+    nativeSprite.hermesAlerts.alerts[0].title = 'DSH 长任务名称'.repeat(50);
+    nativeSprite.hermesAlerts.alerts[0].message = '多行正文\n'.repeat(100);
+    nativeSprite.sendBounds(1900, 0);
+    nativeSprite.renderBubble();
+  });
+  await app.page.getByRole('button', { name: '知道了' }).scrollIntoViewIfNeeded();
+  const small = await app.page.evaluate(() => {
+    const rect = nativeSprite.bubble.getBoundingClientRect().toJSON();
+    const panel = nativeSprite.hermesPanel.el;
+    return {
+      rect,
+      bounds: nativeSprite.visibleClampRect(),
+      scrollable: panel.scrollHeight > panel.clientHeight,
+      region: regions.rects[0],
+    };
+  });
+  assert.ok(small.scrollable, '过长内容仍可滚动访问按钮');
+  assert.ok(small.rect.left >= small.bounds.x && small.rect.top >= small.bounds.y);
+  assert.ok(
+    small.rect.right <= small.bounds.x + small.bounds.w && small.rect.bottom <= small.bounds.y + small.bounds.h,
+  );
+  assert.equal(small.region.x, small.rect.x * 1.5, 'DPI 换算只发生在 IPC 边界');
+  await app.page.getByRole('button', { name: '知道了' }).click();
+  await app.page.getByText('已确认，等待同步').waitFor();
+  await app.page.evaluate(() => {
+    nativeSprite.hermesAlerts.alerts = [];
+    nativeSprite.renderBubble();
+  });
+  assert.equal(await app.page.locator('.is-fitted-alert').count(), 0, '退出通知槽不影响其它气泡');
+});
+
 test('原生 IPC 白名单仅打开安全 Hermes/网页，不调用 DSH 或执行命令', () => {
   const handlers = new Map(),
     opened = [];
@@ -351,12 +460,10 @@ test('原生 IPC 白名单仅打开安全 Hermes/网页，不调用 DSH 或执�
     'file:///x',
     'https://name:pass@example.test',
     'hermes://open/a/b',
-    'dsh://open/session-1',
     alert.url,
     'https://example.test/#/session',
-    'dsh://open',
   ]) {
     handlers.get('pet:open-hermes')({ sender: {} }, { url });
   }
-  assert.deepEqual(opened, [alert.url, 'https://example.test/#/session', 'dsh://open']);
+  assert.deepEqual(opened, [alert.url, 'https://example.test/#/session']);
 });

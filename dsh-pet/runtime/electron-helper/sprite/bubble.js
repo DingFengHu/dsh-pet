@@ -49,6 +49,37 @@ Object.assign(PetSprite.prototype, {
     this.tip.classList.toggle('is-on', this.tipOn);
     window.__dshPetDebug.tooltipOn = this.tipOn;
   },
+  /** 通知限制在窗口与当前屏工作区的交集内；内容改变和移动后都要在上报命中区前重排。 */
+  fitAlertBubble() {
+    const active = this.bubbleSlot === 'hermes' && this.bubble.classList.contains('is-on');
+    this.bubble.classList.toggle('is-fitted-alert', active);
+    if (!active) return;
+    const bounds = this.visibleClampRect();
+    if (!bounds) return;
+    const style = this.bubble.style;
+    const css = getComputedStyle(this.bubble);
+    const gap = Math.min(Math.max(12, parseFloat(css.fontSize) * 0.5), bounds.w / 4, bounds.h / 4);
+    style.setProperty('--alert-width', bounds.w - gap * 2 + 'px');
+    const chrome =
+      parseFloat(css.paddingTop) +
+      parseFloat(css.paddingBottom) +
+      parseFloat(css.borderTopWidth) +
+      parseFloat(css.borderBottomWidth);
+    style.setProperty('--alert-content-height', Math.max(0, bounds.h - gap * 2 - chrome) + 'px');
+    // 先约束尺寸再实测，否则长标题折行后会再次越过下边缘。
+    const { width, height } = this.bubble.getBoundingClientRect();
+    const anchorX = this.winOffset.x + this.halfW;
+    const above = this.winOffset.y + this.size * 0.108 - height;
+    const below = above < bounds.y + gap;
+    const preferredY = below ? this.winOffset.y + this.hitRect.y + this.hitRect.h + gap : above;
+    const left = Math.max(bounds.x + gap, Math.min(anchorX - width / 2, bounds.x + bounds.w - gap - width));
+    const top = Math.max(bounds.y + gap, Math.min(preferredY, bounds.y + bounds.h - gap - height));
+    style.setProperty('--alert-left', left + 'px');
+    style.setProperty('--alert-top', top + 'px');
+    style.setProperty('--alert-tail-x', Math.max(gap, Math.min(anchorX - left, width - gap)) + 'px');
+    this.bubble.classList.toggle('is-below', below);
+  },
+
   renderBubble() {
     // 待办面板占气泡槽且优先级最高：它是用户主动打开的窗口，其余气泡一律让位。
     // 面板是外部塞进来的 DOM，重建 innerHTML 会把它自己抹掉，所以这一段只补显隐与让位。
