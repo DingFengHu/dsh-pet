@@ -5,7 +5,7 @@
 - 背景：Hermes 退役计划阶段 4 第 5 项，蓝色大肥鱼“查看对话”从 `hermes://open` 改为打开 DSH。
 - 调研：DSH 0.2.2 只注册 `dsh://open`（聚焦/拉起主窗口）；Windows 上任何 `dsh://…` 都走 single-instance 只聚焦，不解析会话参数；Web UI 也没有按会话的 URL 路由。所以无法直达某个会话。
 - 改动：`source=dsh` 的提醒（`dsh`/`dsh-fail`）“查看对话”固定打开 `dsh://open`；气泡标题已带会话名。外链白名单 `safeHermesUrl` 只多放行精确的 `dsh://open`（`dsh://open/x`、带参数、大小写变体都拒绝）。Hermes 自己的提醒在 Hermes 停用前仍用 `hermes://open/<id>`；Claude/Windows 提醒仍无链接。
-- 验证：npm test 1711 通过 1 跳过、typecheck、UI 测试 8/8；build + dist 通过。已部署到 D:Appdsh-pet（停计划任务→镜像→启动，ASAR 哈希一致，部署前程序与状态备份在 Hermesetirementphase4-backupsdsh-pet-dfh17-*）。2026-11-07 写入一条 source=dsh 测试提醒，虎哥点“查看对话”确认 DSH 主窗口弹到前台。
+- 验证：npm test 1711 通过 1 跳过、typecheck、UI 测试 8/8；build + dist 通过。已部署到 `D:Appdsh-pet`（停计划任务→镜像→启动，ASAR 哈希一致，部署前程序与状态备份在 `D:DocumentsAI_projectHermesetirementphase4-backupsdsh-pet-dfh17-*`）。2026-11-07 写入一条 source=dsh 测试提醒，虎哥点“查看对话”确认 DSH 主窗口弹到前台。
 
 ## 2026-11-06 DSH v1 inbox 接收端（已部署）
 
