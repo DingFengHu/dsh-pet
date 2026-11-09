@@ -25,6 +25,7 @@ export * from './state.ts';
 export * from './hermes-alerts.ts';
 export * from './hermes-alert-panel.ts';
 export * from './bubble-hold.ts';
+export * from './hotkey.ts';
 export * from './display-hotkey.ts';
 export * from './todo/index.ts';
 export * from './tooltip.ts';
