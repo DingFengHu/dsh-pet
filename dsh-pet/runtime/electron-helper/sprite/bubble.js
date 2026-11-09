@@ -114,7 +114,8 @@ Object.assign(PetSprite.prototype, {
       if (!this.spokenAlertIds.has(alert.id)) {
         this.spokenAlertIds.add(alert.id);
         const head = S.hermesTitle(alert.title);
-        S.speakAlert(head + (/[：:。！？!?]$/.test(head) ? '' : '。') + alert.message);
+        // 传提醒 id：点「知道了」时面板按它停掉这一条的朗读。
+        S.speakAlert(head + (/[：:。！？!?]$/.test(head) ? '' : '。') + alert.message, alert.id);
       }
       this.bubble.classList.remove('is-whisper', S.MEME_BUBBLE_CLASS);
       this.bubble.classList.add('is-on', 'is-clickable');
