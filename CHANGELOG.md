@@ -1,5 +1,10 @@
 # 定制变更记录
 
+## 2026-11-08 修复桌面端 `S.isTypingTarget is not a function`（0.4.3-dfh.20）
+
+- 现象：日志反复出现 `Uncaught TypeError: S.isTypingTarget is not a function (sprite/init.js:189)`，桌面端焦点进入按钮等元素时触发。
+- 原因：`src/shared/hotkey.ts` 没有经 `src/shared/index.ts` 导出，桌面 `window.PetShared` 上缺这个函数。
+- 改动：`index.ts` 补 `export * from './hotkey.ts'`；新增 `src/shared/index-exports.test.ts`，扫描桌面运行时所有 `S.名字`，确认共享层都有导出（修复前该测试只报出 isTypingTarget 一项）。
 ## 2026-11-08 点「知道了」停止这一条的语音（0.4.3-dfh.19）
 
 - 需求：推送气泡朗读时，用户点「知道了」就停止这一条的语音播报。
