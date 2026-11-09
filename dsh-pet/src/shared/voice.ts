@@ -61,10 +61,27 @@ export const VOICE_SPEECH_MAX_CHARS = 60;
  */
 const SPEAK_TIMEOUT_MS = 30_000;
 
-/** 合成请求的超时信号；自动播报与手动点播共用同一份口径。 */
-function speakSignal(): AbortSignal {
-  return AbortSignal.timeout(SPEAK_TIMEOUT_MS);
+/**
+ * 合成请求的超时信号；自动播报与手动点播共用同一份口径。
+ * @param extra - 可选的外部中止信号（推送被「知道了」时用），与超时任一触发即中止。
+ */
+function speakSignal(extra?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(SPEAK_TIMEOUT_MS);
+  return extra ? AbortSignal.any([timeout, extra]) : timeout;
 }
+
+/**
+ * 一条正在合成或播放的推送朗读。`key` 是提醒 id：点「知道了」只停这一条，不误伤别的声音。
+ * `release` 在音频就绪后才有：暂停并释放 blob。
+ */
+interface AlertPlayback {
+  readonly key: string;
+  readonly controller: AbortController;
+  release: (() => void) | null;
+}
+
+/** 还没念完的推送朗读；念完、失败或被停止都会移出。 */
+const alertPlaybacks = new Set<AlertPlayback>();
 
 /** 切换状态并通知订阅者；同值不重复通知。 */
 function setVoiceState(next: VoiceState): void {
@@ -184,10 +201,30 @@ export function setVoiceEnabled(enabled: unknown): void {
  * 用户 2026-11-06 要求：推送也跟「语音播报」开关走，关掉就只弹气泡不出声。
  * 只在桌面端念（推送气泡同时可能出现在网页端，两端都念会叠声）。
  * @param text - 要念的整句（标题 + 正文），超长由 speechSlice 截断。
+ * @param key - 提醒 id；{@link stopAlertSpeech} 按它停掉这一条。
  */
-export function speakAlert(text: string): void {
+export function speakAlert(text: string, key = ''): void {
   if (!text || surface !== 'desktop') return;
-  void speakIfEnabled(text);
+  const playback: AlertPlayback = { key, controller: new AbortController(), release: null };
+  alertPlaybacks.add(playback);
+  void speakIfEnabled(text, playback).finally(() => {
+    // 没拿到音频（关着、失败、被停）就到此为止；拿到了则由播完回调移出。
+    if (!playback.release) alertPlaybacks.delete(playback);
+  });
+}
+
+/**
+ * 停掉某条推送的朗读（用户 2026-11-08 要求：点「知道了」就别再念这一条）。
+ * 还在合成就中止请求、不再播放；已经在播就立即暂停。其它提醒和普通说话不受影响。
+ * @param key - 提醒 id，与 {@link speakAlert} 传入的一致。
+ */
+export function stopAlertSpeech(key: string): void {
+  for (const playback of alertPlaybacks) {
+    if (playback.key !== key) continue;
+    alertPlaybacks.delete(playback);
+    playback.controller.abort();
+    playback.release?.();
+  }
 }
 
 /** 懒加载成品配置；失败按「不播」处理，且只试一次（避免每句都发请求）。 */
@@ -230,8 +267,9 @@ export function playSayVoice(say: { readonly text: string; readonly voiceTo?: Vo
 }
 
 /** 确认配置后再播；桌面端首次调用会顺手拉一次 `/config`。 */
-async function speakIfEnabled(text: string): Promise<void> {
+async function speakIfEnabled(text: string, playback?: AlertPlayback): Promise<void> {
   await loadConfigOnce();
+  if (playback?.controller.signal.aborted) return;
   if (!voiceEnabled) {
     setVoiceState('idle');
     return;
@@ -241,7 +279,7 @@ async function speakIfEnabled(text: string): Promise<void> {
   emitUtterance({ kind: 'start', seq, text });
   setVoiceState('loading');
   try {
-    await speak(speechSlice(text));
+    await speak(speechSlice(text), playback);
   } finally {
     // 成功、失败、超时都走这里：气泡在等这个收尾，漏一次就永远挂着。
     emitUtterance({ kind: 'end', seq, text });
@@ -249,29 +287,60 @@ async function speakIfEnabled(text: string): Promise<void> {
 }
 
 /** 请求合成并播放；任何一步失败都落到 `failed`（气泡上留一个静音喇叭，而不是干脆没图标）。 */
-async function speak(text: string): Promise<void> {
+async function speak(text: string, playback?: AlertPlayback): Promise<void> {
+  const stopped = (): boolean => playback?.controller.signal.aborted === true;
+  /** 音频就绪后才有：释放 blob 并移出在途集合；play() 被拒时也靠它收尾。 */
+  let finish: (() => void) | null = null;
   try {
     const response = await fetch(voiceBase + '/voice/speak', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text, ...(voiceName ? { voice: voiceName } : {}) }),
-      signal: speakSignal(),
+      signal: speakSignal(playback?.controller.signal),
     });
+    if (stopped()) {
+      setVoiceState('idle');
+      return;
+    }
     if (!response.ok || !(response.headers.get('content-type') ?? '').includes('audio')) {
       setVoiceState('failed');
       return;
     }
-    const objectUrl = URL.createObjectURL(await response.blob());
+    const blob = await response.blob();
+    // 合成期间被「知道了」：音频不再播放
+    if (stopped()) {
+      setVoiceState('idle');
+      return;
+    }
+    const objectUrl = URL.createObjectURL(blob);
     const audio = new Audio(objectUrl);
     audio.volume = voiceVolume;
+    const done = (): void => {
+      URL.revokeObjectURL(objectUrl);
+      if (playback) alertPlaybacks.delete(playback);
+    };
+    finish = done;
     // 播完或出错都要释放，否则每句留一个 blob 引用
-    audio.onended = () => URL.revokeObjectURL(objectUrl);
-    audio.onerror = () => URL.revokeObjectURL(objectUrl);
+    audio.onended = done;
+    audio.onerror = done;
+    if (playback) {
+      // 只停声音、不改共享的 voiceState：碎碎念角标可能正显示别的句子的状态。
+      playback.release = () => {
+        audio.pause();
+        done();
+      };
+    }
     // 音频就绪即置 ready：喇叭表示「这句有语音」，不跟播放进度绑定
     setVoiceState('ready');
     await audio.play();
   } catch {
-    /* 含超时：气泡已经显示，失败也不能反过来打断渲染，只把图标换成静音喇叭 */
+    /* 含超时：气泡已经显示，失败也不能反过来打断渲染，只把图标换成静音喇叭；被用户停掉不算失败 */
+    if (stopped()) {
+      setVoiceState('idle');
+      return;
+    }
+    // play() 被拒（自动播放策略、设备故障）不一定触发 onerror：这里补一次收尾，免得条目和 blob 一直挂着。
+    finish?.();
     setVoiceState('failed');
   }
 }

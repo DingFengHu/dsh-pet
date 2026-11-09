@@ -21,6 +21,7 @@ import {
   playSayVoice,
   setVoiceEnabled,
   speakAlert,
+  stopAlertSpeech,
   setSurface,
   setVoiceConfig,
   speechSlice,
@@ -351,6 +352,96 @@ describe('speakAlert —— 推送气泡跟「语音播报」总开关走', () =
     } finally {
       restoreBrowser();
       fetchStub.restore();
+    }
+  });
+
+  test('点「知道了」：正在播的这一条立即暂停，别的提醒照播', async () => {
+    const fetchStub = stubFetch();
+    const sink = { volumes: [] as number[] };
+    const restoreBrowser = stubBrowser(sink);
+    const paused: string[] = [];
+    const AudioStub = (globalThis as { Audio: new (src: string) => object }).Audio;
+    let counter = 0;
+    (globalThis as { Audio: unknown }).Audio = class extends (AudioStub as new () => { play(): Promise<void> }) {
+      readonly tag = `a${++counter}`;
+      pause(): void {
+        paused.push(this.tag);
+      }
+    };
+    try {
+      setSurface('desktop');
+      setVoiceConfig('', true);
+      speakAlert('老大，第一条', 'alert-1');
+      speakAlert('老大，第二条', 'alert-2');
+      await flush();
+      assert.equal(sink.volumes.length, 2, '两条都已开始播放');
+      stopAlertSpeech('alert-1');
+      assert.deepEqual(paused, ['a1'], '只停被确认的那一条');
+      stopAlertSpeech('alert-1');
+      assert.deepEqual(paused, ['a1'], '重复确认不再重复操作');
+    } finally {
+      restoreBrowser();
+      fetchStub.restore();
+    }
+  });
+
+  test('play() 被拒且没有 onerror：也要释放音频，不留在途条目', async () => {
+    const fetchStub = stubFetch();
+    const restoreBrowser = stubBrowser();
+    const revoked: string[] = [];
+    const paused: number[] = [];
+    URL.revokeObjectURL = (url: string) => {
+      revoked.push(url);
+    };
+    (globalThis as { Audio: unknown }).Audio = class {
+      volume = 1;
+      play(): Promise<void> {
+        return Promise.reject(new Error('NotAllowedError'));
+      }
+      pause(): void {
+        paused.push(1);
+      }
+    };
+    try {
+      setSurface('desktop');
+      setVoiceConfig('', true);
+      speakAlert('老大，播不出来', 'alert-rejected');
+      await flush();
+      assert.deepEqual(revoked, ['blob:dsh-pet-test'], 'blob 要释放');
+      assert.equal(getVoiceState(), 'failed');
+      stopAlertSpeech('alert-rejected');
+      assert.equal(paused.length, 0, '条目已移出，确认时无事可做');
+    } finally {
+      restoreBrowser();
+      fetchStub.restore();
+    }
+  });
+
+  test('合成还没回来就点「知道了」：请求被中止，音频不再播放', async () => {
+    const sink = { volumes: [] as number[] };
+    const restoreBrowser = stubBrowser(sink);
+    const previous = globalThis.fetch;
+    let aborted = false;
+    (globalThis as { fetch: unknown }).fetch = (_url: string, init?: { signal?: AbortSignal }) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          aborted = true;
+          reject(new Error('aborted'));
+        });
+      });
+    try {
+      setSurface('desktop');
+      setVoiceConfig('', true);
+      speakAlert('老大，慢慢合成', 'alert-slow');
+      await flush();
+      stopAlertSpeech('alert-slow');
+      await flush();
+      assert.equal(aborted, true, '合成请求要被中止');
+      assert.equal(sink.volumes.length, 0, '不能再出声');
+      assert.equal(getVoiceState(), 'idle', '被用户停掉不算失败');
+    } finally {
+      (globalThis as { fetch: unknown }).fetch = previous;
+      restoreBrowser();
     }
   });
 

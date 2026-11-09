@@ -1,5 +1,11 @@
 # 定制变更记录
 
+## 2026-11-08 点「知道了」停止这一条的语音（0.4.3-dfh.19）
+
+- 需求：推送气泡朗读时，用户点「知道了」就停止这一条的语音播报。
+- 改动：`src/shared/voice.ts` 的 `speakAlert(text, key)` 按提醒 id 记录在途朗读，新增 `stopAlertSpeech(key)`：还在合成就中止请求且不再播放，已在播放就立即暂停并释放音频；状态归 `idle`（不显示失败）。`src/shared/hermes-alert-panel.ts` 点「知道了」时先调 `stopAlertSpeech(id)`，不等确认请求返回。`runtime/electron-helper/sprite/bubble.js` 朗读时传入 `alert.id`。其它提醒、碎碎念和手动点播不受影响。
+- 验证：npm test 1714 通过 1 跳过；test:ui 62 通过 1 跳过；typecheck、lint、check:runtime、format:check 通过；新增 voice 测试覆盖「播放中停止只停这一条」和「合成中停止不出声」。
+
 ## 2026-11-07 DSH 提醒“查看对话”打开 DSH（0.4.3-dfh.18）
 
 - 背景：Hermes 退役计划阶段 4 第 5 项，蓝色大肥鱼“查看对话”从 `hermes://open` 改为打开 DSH。

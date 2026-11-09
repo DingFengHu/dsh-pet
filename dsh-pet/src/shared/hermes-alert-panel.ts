@@ -2,6 +2,7 @@
 import { ROUTE_PATH } from './constants.ts';
 import { postAction } from './state.ts';
 import { safeHermesUrl, type HermesAlert } from './hermes-alerts.ts';
+import { stopAlertSpeech } from './voice.ts';
 
 /** 在途请求只活到 10 秒超时，切换待办或重挂面板不会重复确认。 */
 const pendingAcks = new Map<string, Promise<boolean>>();
@@ -146,6 +147,8 @@ export function createHermesAlertPanel(options: { open: (url: string) => void; b
     () => {
       if (!view || pending || acknowledgedId === view.alert.id) return;
       const id = view.alert.id;
+      // 用户 2026-11-08 要求：点「知道了」立即停掉这一条的语音，不等确认请求回来。
+      stopAlertSpeech(id);
       pending = true;
       error = '';
       paint();

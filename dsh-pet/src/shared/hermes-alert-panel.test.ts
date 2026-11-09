@@ -35,3 +35,10 @@ test('正文用大肥鱼蓝，不再显示「可能已过时」提示', () => {
   assert.match(HERMES_ALERT_CSS, /\.dsh-pet-hermes-msg\{[^}]*color:#2c3f86/);
   assert.doesNotMatch(readFileSync(new URL('./hermes-alert-panel.ts', import.meta.url), 'utf8'), /可能已过时/);
 });
+
+test('点「知道了」先停掉这一条的朗读；桌面朗读带上提醒 id', () => {
+  const panel = readFileSync(new URL('./hermes-alert-panel.ts', import.meta.url), 'utf8');
+  assert.match(panel, /const id = view\.alert\.id;[\s\S]{0,120}stopAlertSpeech\(id\);[\s\S]{0,40}pending = true;/);
+  const bubble = readFileSync(new URL('../../runtime/electron-helper/sprite/bubble.js', import.meta.url), 'utf8');
+  assert.match(bubble, /S\.speakAlert\([^;]*alert\.id\)/);
+});
