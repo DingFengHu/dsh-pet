@@ -28,6 +28,8 @@ export interface UsageConfig {
   readonly python: string;
   /** DeepSeek API Key 的 1Password 条目 ID。 */
   readonly deepseekItem: string | null;
+  /** OpenRouter AUTO/Jev Key 的 1Password 条目 ID；缺省时显示未配置。 */
+  readonly openrouterItem: string | null;
   /** OpenAI 组织 Admin Key 的 1Password 条目 ID。 */
   readonly openaiAdminItem: string | null;
   /** Claude 长期 OAuth 令牌（claude setup-token）的 1Password 条目 ID；CLI 读不到额度时兜底。 */
@@ -81,6 +83,7 @@ export function parseUsageConfig(raw: unknown): UsageConfig {
     opReaderDir: str(op.readerDir),
     python: str(op.python) ?? 'python',
     deepseekItem: str(items.deepseek),
+    openrouterItem: str(items.openrouter),
     openaiAdminItem: str(items.openaiAdmin),
     claudeOauthItem: str(items.claudeOauth),
     claudeConsoleOrg: str(o.claudeConsoleOrg),

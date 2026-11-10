@@ -22,7 +22,7 @@ function acknowledge(baseUrl: string, id: string): Promise<boolean> {
 const HUNIU_TITLE = '虎妞';
 
 /**
- * 气泡标题：沿用当前版本的「老大，xxxx」，虎妞转发的消息为「老大，虎妞说：」。
+ * 气泡标题：沿用当前版本的「老大，xxxx」，虎妞转发的消息为「虎妞说：」。
  * 标题已带来源（Hermes / Claude / Windows / DSH）时不再加「Hermes · 」前缀。只改显示，不改宿主快照与状态文件。
  *
  * @param title - 宿主给的原始标题。
@@ -30,7 +30,7 @@ const HUNIU_TITLE = '虎妞';
  */
 export function hermesTitle(title: string, count = 1): string {
   const t = title.trim();
-  if (t === HUNIU_TITLE) return `老大，虎妞说${count > 1 ? `（${count} 条）` : ''}：`;
+  if (t === HUNIU_TITLE) return `虎妞说${count > 1 ? `（${count} 条）` : ''}：`;
   const sourced = /^(hermes|claude|windows|dsh)(?![a-z])/i.test(t) ? t : `Hermes · ${t}`;
   return `老大，${sourced}${count > 1 ? ` (${count})` : ''}`;
 }

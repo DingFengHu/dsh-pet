@@ -13,9 +13,9 @@ test('标题统一以「老大，」开头，已带来源时不重复 Hermes 前
   assert.equal(hermesTitle('任务失败'), '老大，Hermes · 任务失败');
 });
 
-test('虎妞转发的消息标题为「老大，虎妞说：」', () => {
-  assert.equal(hermesTitle('虎妞'), '老大，虎妞说：');
-  assert.equal(hermesTitle(' 虎妞 ', 3), '老大，虎妞说（3 条）：');
+test('虎妞转发的消息标题为「虎妞说：」', () => {
+  assert.equal(hermesTitle('虎妞'), '虎妞说：');
+  assert.equal(hermesTitle(' 虎妞 ', 3), '虎妞说（3 条）：');
 });
 
 test('只有正文改用系统正常字体，其余继承气泡字体；不使用假粗体', () => {
