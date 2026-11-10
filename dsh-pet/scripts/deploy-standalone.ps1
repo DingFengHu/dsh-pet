@@ -51,7 +51,7 @@ if ($head -ne $tip) { Fail "HEAD $head is not origin/$Branch tip $tip (merge fir
 $manifestPath = Join-Path $InstallDir 'deploy-manifest.json'
 $asarPath = Join-Path $InstallDir 'resources\app.asar'
 if (Test-Path $manifestPath) {
-  $live = Get-Content $manifestPath -Raw | ConvertFrom-Json
+  $live = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
   $liveHash = (Get-FileHash $asarPath -Algorithm SHA256).Hash
   if ($liveHash -ne $live.asarHash) { Fail "installed app.asar was modified after deploy of $($live.commit) (hand patch?). Commit that change and merge it first." }
   git merge-base --is-ancestor $live.commit $head
@@ -60,7 +60,10 @@ if (Test-Path $manifestPath) {
   Fail "no $manifestPath; verify the live install by hand, then rerun with -AdoptUnmanaged"
 }
 
-$version = (Get-Content (Join-Path $pkgDir 'package.json') -Raw | ConvertFrom-Json).version
+# regex, not ConvertFrom-Json: PS 5.1 ConvertFrom-Json throws on this package.json
+$pkgText = Get-Content (Join-Path $pkgDir 'package.json') -Raw -Encoding UTF8
+if ($pkgText -notmatch '"version"\s*:\s*"([^"]+)"') { Fail 'no version in package.json' }
+$version = $Matches[1]
 Write-Output "guards OK: $head ($version)"
 if ($CheckOnly) { exit 0 }
 
