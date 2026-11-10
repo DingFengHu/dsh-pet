@@ -11,8 +11,9 @@
 | Codex API         | 赠送余额 / 赠送总额、本期花费、到期日、按 Key 展开花费 / 请求 / token | OpenAI 组织 Admin Key 读 costs / usage；赠送额度读专用 Chrome 里的 Credit grants 页                                                                   |
 | Claude API        | 赠送余额（多笔叠加）、最近到期金额、按 Key 展开                       | 专用 Chrome 里 Claude Console 的同源请求                                                                                                              |
 | DeepSeek          | 余额（充值 / 赠送）                                                   | DeepSeek API Key 读 `/user/balance`                                                                                                                   |
+| OpenRouter · Jev  | 账户余额 / 总充值；Key 剩余 / 上限、限额周期、UTC 日 / 周 / 月已用     | OpenRouter Key 只读 `GET /api/v1/key` 与 `/api/v1/credits`；账户余额读不到（普通 Key 无权限）时只显示 Key 部分并注明原因                               |
 
-- 面板可见时每 60 秒刷新一次，有来源正在读取时 3 秒后再取。面板关着时每 3 分钟后台预热一次 Codex / Claude 套餐与 DeepSeek 余额（不开浏览器标签），点开即是新数；走专用 Chrome 标签的 Codex API 赠送额度与 Claude API 仍只在面板打开时读取。
+- 面板可见时每 60 秒刷新一次，有来源正在读取时 3 秒后再取。面板关着时每 3 分钟后台预热一次 Codex / Claude 套餐、DeepSeek 与 OpenRouter 余额（不开浏览器标签），点开即是新数；走专用 Chrome 标签的 Codex API 赠送额度与 Claude API 仍只在面板打开时读取。
 - 每个来源独立节流与缓存：套餐 1 分钟，API 用量 10 分钟，OpenAI 赠送额度页 6 小时。点刷新按钮可提前读取（各来源仍有最短间隔）。
 - 某个来源失败只影响它自己那一块：有旧数据时标黄并注明数据时间，从未成功时标红。
 
@@ -35,7 +36,8 @@
     "items": {
       "deepseek": "<1Password 条目 ID>",
       "openaiAdmin": "<1Password 条目 ID>",
-      "claudeOauth": "<1Password 条目 ID，可选>"
+      "claudeOauth": "<1Password 条目 ID，可选>",
+      "openrouter": "<1Password 条目 ID，可选>"
     }
   },
   "claudeConsoleOrg": "<Claude Console 组织 ID>",
@@ -55,7 +57,7 @@
 
 ## 代码位置
 
-- 取数：`dsh-pet/src/host/usage/`（`plan.ts` 套餐、`api-keys.ts` API 用量、`cdp.ts` 专用 Chrome、`secrets.ts` 1Password、`source.ts` 缓存节流、`config.ts` 配置）
+- 取数：`dsh-pet/src/host/usage/`（`plan.ts` 套餐、`api-keys.ts` API 用量、`cdp.ts` 专用 Chrome、`openrouter.ts` OpenRouter、`secrets.ts` 1Password、`source.ts` 缓存节流、`config.ts` 配置）
 - 路由：`dsh-pet/src/host/routes/usage.ts`
 - 面板：`dsh-pet/runtime/electron-helper/usage.html`，窗口 `runtime/electron-helper/main/usage-window.js`
 - 快捷键：`runtime/electron-helper/sprite/input.js`（Shift+点击不播点击动画、不计分；同时按 Ctrl 时按「呼出 DSH」处理）

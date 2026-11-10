@@ -1,5 +1,13 @@
 # 定制变更记录
 
+## 2026-11-10 补回 dfh.20 丢失的两项改动，部署加守卫（0.4.3-dfh.21）
+
+- 现象：用量面板的 OpenRouter 额度、虎妞消息标题「虎妞说：」在 dfh.20 部署后消失。
+- 根因：这两项在 2026-11-07 是用共享 checkout 里**未提交**的代码直接改安装包上线的，从没进过 `custom`。2026-11-08 另一个会话按规范从 `origin/custom` 构建 dfh.20 并整包镜像，于是把它们覆盖了。部署流程没有检查“线上那份是不是 `custom` 的子集”。
+- 补回：OpenRouter 只读额度（`src/host/usage/openrouter.ts`，`usage.json` 的 `items.openrouter`），以及虎妞标题「虎妞说：」（保留 dfh.19 点「知道了」停朗读）。PR #26。
+- 防护：新增 `dsh-pet/scripts/deploy-standalone.ps1` 作为唯一部署入口。工作区不干净、HEAD 不是 `origin/custom` 最新提交、安装包被手改过、线上构建不包含在本次提交里，任何一种情况都拒绝部署。部署时在安装目录写 `deploy-manifest.json`（提交、版本、asar 哈希）。见 INSTALL.md 与仓库根 AGENTS.md。
+- 验证：npm test 1723 通过 1 跳过；typecheck、lint、prettier 通过。已部署，`/health` 返回 0.4.3-dfh.21，asar 哈希一致。用同一份代码实际读到 OpenRouter 账户余额与 Key 限额。
+
 ## 2026-11-08 修复桌面端 `S.isTypingTarget is not a function`（0.4.3-dfh.20）
 
 - 现象：日志反复出现 `Uncaught TypeError: S.isTypingTarget is not a function (sprite/init.js:189)`，桌面端焦点进入按钮等元素时触发。

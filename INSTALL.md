@@ -132,7 +132,7 @@ $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBat
 Register-ScheduledTask -TaskName 'DSH Pet Standalone' -Action $a -Trigger $t -Principal $p -Settings $s
 ```
 
-升级：`npm run build && npm run dist` 后，先 `Stop-ScheduledTask 'DSH Pet Standalone'`，再把 `dist-app/win-unpacked` 镜像到安装目录，最后 `Start-ScheduledTask`。
+升级：只用 `dsh-pet/scripts/deploy-standalone.ps1`（在 `dsh-pet/` 目录、`custom` 最新提交的干净 worktree 里运行）。它先做四道检查，任何一道不过就拒绝部署：工作区必须干净；HEAD 必须正好是刚拉取的 `origin/custom`；安装目录的 `app.asar` 必须和 `deploy-manifest.json` 记录的哈希一致（不许手改安装包）；线上那次构建的提交必须包含在本次 HEAD 里（新构建不会丢掉已上线的功能）。检查通过后它会构建、备份（保留最近 3 份，放在 `D:\App\dsh-pet-backup`）、停任务、镜像、写清单、启动任务，再核对 `/health` 版本。不要手动 robocopy，也不要直接改安装目录里的 asar。
 
 ## 安装后你会看到什么
 
