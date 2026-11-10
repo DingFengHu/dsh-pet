@@ -448,6 +448,31 @@
         ];
       }
 
+      /** 账户余额与 Key 限额独立展示，不混入其他平台的本期花费。 */
+      function openrouterBlock(src) {
+        if (!src) return [];
+        const d = src.data;
+        if (!d) return [line('OpenRouter · Jev', src.error ? '—' : null, 'out'), warn(src)];
+        const cycles = { daily: '每日（UTC）', weekly: '每周（UTC）', monthly: '每月（UTC）' };
+        const period = d.limitReset === null ? '不重置' : cycles[d.limitReset];
+        const exactUsd = (n) => '$' + n.toLocaleString('en-US', { useGrouping: false, maximumSignificantDigits: 21 });
+        return [
+          line('OpenRouter · Jev', d.account ? exactUsd(d.account.balanceUsd) : '—'),
+          h('div', 'note', d.account ? `账户余额 · 总充值 ${exactUsd(d.account.totalCreditsUsd)}` : '账户余额未知'),
+          line(
+            'Key 剩余 / 上限',
+            d.limitUsd === null ? '无限额' : `${exactUsd(d.remainingUsd)} / ${exactUsd(d.limitUsd)}`,
+          ),
+          h('div', 'note', `限额${period} · Key 累计已用 ${exactUsd(d.usageUsd)}`),
+          h(
+            'div',
+            'note',
+            `UTC 日 ${exactUsd(d.dailyUsageUsd)} · 周 ${exactUsd(d.weeklyUsageUsd)} · 月 ${exactUsd(d.monthlyUsageUsd)}`,
+          ),
+          warn(src, d.accountError ? `账户额度未读到：${d.accountError}` : null),
+        ];
+      }
+
       let snap = null;
       let visible = true;
       let timer = 0;
@@ -475,11 +500,14 @@
           ...cardBlock('codexApi', 'Codex API', s.codexApi),
           ...cardBlock('claudeApi', 'Claude API', s.claudeApi),
           ...deepseekBlock(s.deepseek),
+          ...openrouterBlock(s.openrouter),
         ];
         $('body').replaceChildren(...rows.filter(Boolean));
         const spent = [s.codexApi.data, s.claudeApi.data].filter(Boolean).reduce((t, d) => t + d.totalCostUsd, 0);
         $('total').textContent = s.codexApi.data || s.claudeApi.data ? usd(spent) : '…';
-        const busy = ['codex', 'claude', 'codexApi', 'claudeApi', 'deepseek'].some((k) => s[k].refreshing);
+        const busy = ['codex', 'claude', 'codexApi', 'claudeApi', 'deepseek', 'openrouter'].some(
+          (k) => s[k]?.refreshing,
+        );
         $('sub').textContent = busy ? 'AI 饭票小票 · 正在对账…' : 'AI 饭票小票';
         $('time').textContent = s.generatedAt ? '纽约 ' + fmtTime.format(new Date(s.generatedAt)) : '';
         report();
@@ -528,7 +556,15 @@
       $('refresh').addEventListener('click', () => load(true));
       $('close').addEventListener('click', () => window.close());
       const empty = { data: null, error: null, refreshing: true, okAt: null };
-      snap = { codex: empty, claude: empty, codexApi: empty, claudeApi: empty, deepseek: empty, generatedAt: 0 };
+      snap = {
+        codex: empty,
+        claude: empty,
+        codexApi: empty,
+        claudeApi: empty,
+        deepseek: empty,
+        openrouter: empty,
+        generatedAt: 0,
+      };
       render();
       document.fonts.ready.then(report);
       load(false);

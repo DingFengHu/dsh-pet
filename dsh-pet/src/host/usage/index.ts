@@ -1,7 +1,7 @@
 /**
- * 用量服务：把五个来源（Codex / Claude 套餐、Codex / Claude API、DeepSeek）装进各自的缓存外壳，
+ * 用量服务：把套餐、API 用量与余额来源装进各自的缓存外壳，
  * 对外只给一份快照。面板打开时由页面轮询驱动；面板关着时只做后台预热（startBackground）：
- * 定时刷新不开浏览器标签的来源（Codex / Claude 套餐、DeepSeek），点开面板即是新数。
+ * 定时刷新不开浏览器标签的来源（Codex / Claude 套餐、DeepSeek、OpenRouter），点开面板即是新数。
  * 走专用 Chrome 标签的来源（Codex API 的赠送额度、Claude API）仍只在面板打开时读取。
  * @module dsh-pet/src/host/usage/index
  */
@@ -18,6 +18,7 @@ import {
 import { loadUsageConfig, type UsageConfig } from './config.ts';
 import { createClaudePlanReader, createClaudeTokenProbe, readCodexPlan, type PlanUsage } from './plan.ts';
 import { createLazySecret } from './secrets.ts';
+import { createOpenRouterReader, type OpenRouterUsage } from './openrouter.ts';
 import { createSource, type Source, type SourceSnapshot } from './source.ts';
 
 /** 面板拿到的整份快照。 */
@@ -27,6 +28,7 @@ export interface UsageSnapshot {
   readonly codexApi: SourceSnapshot<ApiUsage>;
   readonly claudeApi: SourceSnapshot<ApiUsage>;
   readonly deepseek: SourceSnapshot<DeepSeekBalance>;
+  readonly openrouter: SourceSnapshot<OpenRouterUsage>;
   readonly generatedAt: number;
 }
 
@@ -55,6 +57,7 @@ export interface UsageSources {
   readonly codexApi: Source<ApiUsage>;
   readonly claudeApi: Source<ApiUsage>;
   readonly deepseek: Source<DeepSeekBalance>;
+  readonly openrouter: Source<OpenRouterUsage>;
 }
 
 /** 后台预热的默认间隔。 */
@@ -111,6 +114,14 @@ function buildSources(config: UsageConfig, cwd: string): UsageSources {
       },
     ),
     claudeApi: createSource(createClaudeApiReader(config), { refreshMs: 10 * MIN, retryMs: 2 * MIN, minForceMs: MIN }),
+    openrouter: createSource(
+      createOpenRouterReader(createLazySecret(op, config.openrouterItem, 'OpenRouter API Key')),
+      {
+        refreshMs: MIN,
+        retryMs: 30000,
+        minForceMs: 10000,
+      },
+    ),
     deepseek: createSource(createDeepSeekReader(createLazySecret(op, config.deepseekItem, 'DeepSeek API Key')), {
       refreshMs: MIN,
       retryMs: 30000,
@@ -141,7 +152,7 @@ export function createUsageServiceFrom(load: () => Promise<UsageSources>): Usage
   const service: UsageService = {
     async snapshot(force = false, waitMs = 1500) {
       const s = await get();
-      const all = [s.codex, s.claude, s.codexApi, s.claudeApi, s.deepseek];
+      const all = [s.codex, s.claude, s.codexApi, s.claudeApi, s.deepseek, s.openrouter];
       const pending = Promise.allSettled(all.map((src) => src.ensure(force)));
       await Promise.race([pending, new Promise((r) => setTimeout(r, waitMs))]);
       return {
@@ -150,12 +161,13 @@ export function createUsageServiceFrom(load: () => Promise<UsageSources>): Usage
         codexApi: s.codexApi.peek(),
         claudeApi: s.claudeApi.peek(),
         deepseek: s.deepseek.peek(),
+        openrouter: s.openrouter.peek(),
         generatedAt: Date.now(),
       };
     },
     async warm() {
       const s = await get();
-      await Promise.allSettled([s.codex, s.claude, s.deepseek].map((src) => src.ensure(false)));
+      await Promise.allSettled([s.codex, s.claude, s.deepseek, s.openrouter].map((src) => src.ensure(false)));
     },
     startBackground(intervalMs = BACKGROUND_WARM_MS, firstDelayMs = 20000) {
       const tick = (): void => {

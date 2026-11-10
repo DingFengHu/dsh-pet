@@ -161,13 +161,18 @@ test('配置：非法字段回落默认，标识符只来自本机文件', () =>
   const empty = parseUsageConfig(null);
   assert.equal(empty.opReaderDir, null);
   assert.equal(empty.deepseekItem, null);
+  assert.equal(empty.openrouterItem, null);
   assert.equal(empty.cdpUrl, 'http://127.0.0.1:9222');
   const c = parseUsageConfig({
-    onePassword: { readerDir: 'D:/x', items: { deepseek: 'abc', openaiAdmin: ' ', claudeOauth: 'tok1' } },
+    onePassword: {
+      readerDir: 'D:/x',
+      items: { deepseek: 'abc', openaiAdmin: ' ', claudeOauth: 'tok1', openrouter: ' router ' },
+    },
     credits: { claude: { expiresAt: '2026-11-07', resetDay: 40 } },
   });
   assert.equal(c.opReaderDir, 'D:/x');
   assert.equal(c.deepseekItem, 'abc');
+  assert.equal(c.openrouterItem, 'router');
   assert.equal(c.openaiAdminItem, null);
   assert.equal(c.claudeOauthItem, 'tok1');
   assert.equal(c.credits.claude.resetDay, 1);
@@ -290,13 +295,16 @@ test('后台预热：只刷新不开浏览器标签的来源，面板关着也�
     codexApi: src('codexApi', {}),
     claudeApi: src('claudeApi', {}),
     deepseek: src('deepseek', {}),
+    openrouter: src('openrouter', { usageUsd: 2 }),
   } as unknown as UsageSources;
   const service = createUsageServiceFrom(async () => sources);
   await service.warm();
-  assert.deepEqual(calls.sort(), ['claude', 'codex', 'deepseek']);
+  assert.deepEqual(calls.sort(), ['claude', 'codex', 'deepseek', 'openrouter']);
   const snap = await service.snapshot(false, 50);
   assert.ok(snap.codex.okAt !== null && snap.deepseek.okAt !== null);
-  assert.deepEqual(calls.sort(), ['claude', 'claudeApi', 'codex', 'codexApi', 'deepseek']);
+  assert.equal(snap.openrouter.data?.usageUsd, 2);
+  assert.ok(snap.openrouter.okAt !== null);
+  assert.deepEqual(calls.sort(), ['claude', 'claudeApi', 'codex', 'codexApi', 'deepseek', 'openrouter']);
   const stop = service.startBackground(60000, 60000);
   stop();
 });
