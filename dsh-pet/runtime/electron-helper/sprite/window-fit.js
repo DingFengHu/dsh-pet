@@ -32,13 +32,27 @@ Object.assign(PetSprite.prototype, {
   fitWindow() {
     const width = this.size + this.margin.l + this.margin.r;
     const height = this.winH + this.margin.t + this.margin.b;
+    // Windows 不钳透明窗口，但身体仍必须可达。检查命中盒而非窗口外框，屏间空洞也算越界。
+    const hit = this.hitRect;
+    const reachable = S.clampReachableRect(
+      WORK_AREAS,
+      {
+        x: this.pos.x + hit.x,
+        y: this.pos.y + hit.y,
+        width: hit.w,
+        height: hit.h,
+      },
+      S.MIN_REACHABLE_PX,
+    );
+    const bodyX = reachable.x - hit.x;
+    const bodyY = reachable.y - hit.y;
     // 工作区取本体中心所在那块屏：窗口跨屏时按本体所在屏钳，与「窗口被关在单屏工作区内」一致
     const area = CONFIG.isWindowClampedToWorkArea
-      ? S.resolveRect(WORK_AREAS, this.pos.x + this.halfW, this.pos.y + this.halfH)
+      ? S.resolveRect(WORK_AREAS, bodyX + this.halfW, bodyY + this.halfH)
       : undefined;
     const fit = S.fitWindowInArea({
-      bodyX: this.pos.x,
-      bodyY: this.pos.y,
+      bodyX,
+      bodyY,
       width,
       height,
       bodyWidth: this.size,

@@ -279,6 +279,26 @@ describe('throwStepRegion —— 任务栏条带不是墙，空洞仍是墙（�
 });
 
 describe('anchorPixel / planMove —— 角落与漫游不进空洞', () => {
+  test('自主漫游不能穿过屏幕空洞，即使终点左右缘都在屏上', () => {
+    const common = {
+      cx: 200,
+      cy: 300,
+      W: 1600,
+      H: 800,
+      dir: 1 as const,
+      minDist: 1200,
+      maxDist: 1200,
+      margin: 20,
+      halfW: 100,
+      areas: [
+        { x: 0, y: 0, width: 600, height: 800 },
+        { x: 1000, y: 0, width: 600, height: 800 },
+      ],
+    };
+    assert.equal(planMove(common), null);
+    assert.equal(planMove({ ...common, cx: 1400, dir: -1 }), null);
+  });
+
   test('角落按外接矩形算会掉进空洞（旧行为），按主屏算则落在主屏内', () => {
     const hull = boundingRect(AREAS);
     const common = { corner: 'top-left' as const, marginX: 24, marginY: 24, size: SIZE, W: hull.width, H: hull.height };
@@ -352,8 +372,9 @@ describe('anchorPixel / planMove —— 角落与漫游不进空洞', () => {
     assert.equal(planMove({ ...common, dir: 1, areas: [MAIN] }), null, '锁定主屏：跨屏那一步必须被拒');
     // 锁定 ≠ 禁止移动：同一块屏内的小步照常可达
     assert.ok(planMove({ ...common, cx: 800, dir: 1, areas: [MAIN] }), '锁定主屏：屏内移动不受影响');
-    // 锁的是「当前所在那块屏」而不是主屏：落点落在副屏内 ⇒ 锁副屏时同一步可达
-    assert.ok(planMove({ ...common, dir: 1, areas: [SIDE] }), '锁定副屏：落点在副屏内 ⇒ 可达');
+    // 锁定副屏后，起点与全程也必须在副屏内，而不是只判断终点。
+    assert.ok(planMove({ ...common, cx: 2900, dir: 1, areas: [SIDE] }), '锁定副屏：屏内走动可达');
+    assert.equal(planMove({ ...common, dir: 1, areas: [SIDE] }), null, '不能从屏外规划一条走入副屏的路线');
   });
 
   test('不传 areas 时退化为旧的单矩形判定', () => {
