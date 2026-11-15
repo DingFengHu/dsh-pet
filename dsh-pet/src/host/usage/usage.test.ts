@@ -217,12 +217,18 @@ test('凭据：未配置不启动读取器，读到后缓存，forget 后重读�
   let reads = 0;
   const none = createLazySecret({ python: 'python', readerDir: null }, 'id', 'X', async () => 'v');
   await assert.rejects(none.get(), /未配置 X/);
-  const s = createLazySecret({ python: 'python', readerDir: 'D:/r' }, 'id', 'X', async (o, id) => {
-    reads++;
-    assert.equal(o.readerDir, 'D:/r');
-    assert.equal(id, 'id');
-    return 'secret';
-  });
+  const s = createLazySecret(
+    { python: 'python', readerDir: 'D:/r' },
+    'id',
+    'X',
+    async (o, id) => {
+      reads++;
+      assert.equal(o.readerDir, 'D:/r');
+      assert.equal(id, 'id');
+      return 'secret';
+    },
+    { cooldownMs: 0 },
+  );
   assert.equal(await s.get(), 'secret');
   assert.equal(await s.get(), 'secret');
   assert.equal(reads, 1);
@@ -233,6 +239,78 @@ test('凭据：未配置不启动读取器，读到后缓存，forget 后重读�
     throw new Error('raw stderr with secret-ish detail');
   });
   await assert.rejects(bad.get(), (e: Error) => e.message === '无法从 1Password 读取 X。');
+});
+
+test('凭据：读取失败或 forget 后 30 分钟内不再读 1Password（账户级 1000 次/天额度）', async () => {
+  let now = 1_000_000;
+  let reads = 0;
+  let fail = true;
+  const s = createLazySecret(
+    { python: 'python', readerDir: 'D:/r' },
+    'id',
+    'X',
+    async () => {
+      reads++;
+      if (fail) throw new Error('Too many requests');
+      return 'secret';
+    },
+    { cooldownMs: 30 * 60_000, now: () => now },
+  );
+  await assert.rejects(s.get(), /无法从 1Password 读取 X/);
+  assert.equal(reads, 1);
+  // 后台每 3 分钟、面板开着每 30 秒重试：冷却期内一次都不读。
+  for (let i = 0; i < 20; i++) {
+    now += 30_000;
+    await assert.rejects(s.get(), /暂时无法从 1Password 读取 X，约 \d+ 分钟后自动重试/);
+  }
+  assert.equal(reads, 1);
+  fail = false;
+  now = 1_000_000 + 30 * 60_000;
+  assert.equal(await s.get(), 'secret');
+  assert.equal(reads, 2);
+  // 密钥被服务端判失效（401）后 forget：同样等冷却期过了才重读。
+  s.forget();
+  now += 60_000;
+  await assert.rejects(s.get(), /X 已失效，更新 1Password 后约 29 分钟内自动重读/);
+  assert.equal(reads, 2);
+  now += 30 * 60_000;
+  assert.equal(await s.get(), 'secret');
+  assert.equal(reads, 3);
+  // 同时来的多个请求只读一次。
+  s.forget();
+  now += 30 * 60_000;
+  const results = await Promise.all([s.get(), s.get(), s.get()]);
+  assert.deepEqual(results, ['secret', 'secret', 'secret']);
+  assert.equal(reads, 4);
+});
+
+test('凭据：未配置不计冷却；forget 时进行中的读取不写回缓存', async () => {
+  let now = 0;
+  let reads = 0;
+  const opts = { python: 'python', readerDir: null as string | null };
+  let release: (v: string) => void = () => undefined;
+  const s = createLazySecret(
+    opts,
+    'id',
+    'X',
+    () => {
+      reads++;
+      return new Promise<string>((r) => {
+        release = r;
+      });
+    },
+    { cooldownMs: 30 * 60_000, now: () => now },
+  );
+  await assert.rejects(s.get(), /未配置 X/);
+  opts.readerDir = 'D:/r';
+  const pending = s.get();
+  assert.equal(reads, 1, '未配置那次没有占用冷却');
+  s.forget();
+  release('old');
+  assert.equal(await pending, 'old');
+  now += 60_000;
+  await assert.rejects(s.get(), /X 已失效/, 'forget 之后进行中的旧值没有写回缓存');
+  assert.equal(reads, 1);
 });
 
 test('令牌只注入白名单里的渲染页（宠物页与用量面板页）', () => {
