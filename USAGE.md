@@ -19,7 +19,7 @@
 
 ## 凭据与边界
 
-- API Key 一律经 1Password **Hermes-agent 只读 service account**（DPAPI 保护的 `hermes_reader.py`）在用到时读取，只放进程内存，只发往对应官方 API。不读 `TOKEN.txt`，不写盘、不进日志、不经命令行参数（命令行只带条目 ID）。
+- API Key 一律经 1Password **Hermes-agent 只读 service account**（DPAPI 保护的 `hermes_reader.py`）在用到时读取，只放进程内存，只发往对应官方 API。不读 `TOKEN.txt`，不写盘、不进日志、不经命令行参数（命令行只带条目 ID）。读取失败或密钥失效后，同一条目 30 分钟内不再读 1Password（账户级 1000 次/天额度共用，0.4.3-dfh.24），面板这段时间显示约几分钟后自动重试；密钥被判失效的，显示「已失效，更新 1Password 后约 N 分钟内自动重读」，改完 1Password 想立刻生效就重启大肥鱼。
 - 读取器以 `python -I` 隔离模式运行，失败只给笼统错误，不转发 stderr。
 - 专用 Chrome（CDP `127.0.0.1:9222`）每次读取自开一个后台标签，用完即关，不碰其他标签，不读 Cookie / 存储。
 - 数据路由 `GET /dsh-pet-7340/usage` 只回数字与错误文案，受独立应用的令牌保护；令牌只注入宠物页与 `usage.html` 两个本机渲染页。
