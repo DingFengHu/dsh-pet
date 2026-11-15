@@ -9,7 +9,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { MIN_REACHABLE_PX } from '../shared/constants.ts';
-import { resolveRect } from '../shared/displays.ts';
+import { clampReachableRect, resolveRect } from '../shared/displays.ts';
 import { fitWindowInArea } from '../shared/motion.ts';
 
 const require = createRequire(import.meta.url);
@@ -22,7 +22,7 @@ const globals = globalThis as unknown as Record<string, unknown>;
 globals.PetSprite = function PetSprite() {};
 globals.CONFIG = { isWindowClampedToWorkArea: false };
 globals.WORK_AREAS = [AREA];
-globals.S = { resolveRect, fitWindowInArea, MIN_REACHABLE_PX };
+globals.S = { clampReachableRect, resolveRect, fitWindowInArea, MIN_REACHABLE_PX };
 globals.VIEW = { x: 0, y: 0, w: 1920, h: 1080 };
 globals.toScreen = (v: number): number => v; // 上报单位换算在这里取 1:1，断言才看得懂
 globals.window = { __dshPetDebug: {} };
@@ -82,6 +82,24 @@ const makeSprite = (): Sprite =>
   }) as Sprite;
 
 describe('sprite/window-fit.js —— 窗口落位接线', () => {
+  test('Windows 自主位移越界也必须留下可点击身体，而不是整只消失', () => {
+    setWindowClampedToWorkArea(false);
+    for (const pos of [
+      { x: -9999, y: 400 },
+      { x: 9999, y: 400 },
+      { x: 600, y: -9999 },
+      { x: 600, y: 9999 },
+    ]) {
+      const sprite = makeSprite();
+      sprite.pos = pos;
+      const fit = sprite.fitWindow();
+      const x = fit.x + fit.offsetX + sprite.hitRect.x;
+      const y = fit.y + fit.offsetY + sprite.hitRect.y;
+      assert.ok(Math.min(x + sprite.hitRect.w, AREA.width) - Math.max(x, 0) >= MIN_REACHABLE_PX);
+      assert.ok(Math.min(y + sprite.hitRect.h, AREA.height) - Math.max(y, 0) >= MIN_REACHABLE_PX);
+    }
+  });
+
   test('平台不钳窗口（Windows / macOS）：窗口原样探出屏幕 → 本体偏移不动、不写样式', () => {
     setWindowClampedToWorkArea(false);
     const sprite = makeSprite();

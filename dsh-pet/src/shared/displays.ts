@@ -86,6 +86,37 @@ export const clampPointToRegion = (rects: Rect[], x: number, y: number): { x: nu
   return i < 0 ? { x, y } : clampPointInRect(rects[i], x, y);
 };
 
+/** 把身体盒拉回可达区：至少在一块真实屏上留下 keep×keep，已可达的位置不动（包括骑缝）。 */
+export const clampReachableRect = (rects: Rect[], box: Rect, keep: number): { x: number; y: number } => {
+  let result = { x: box.x, y: box.y };
+  let best = Infinity;
+  for (const area of rects) {
+    const kx = Math.min(keep, box.width, area.width);
+    const ky = Math.min(keep, box.height, area.height);
+    const x = Math.min(Math.max(box.x, area.x + kx - box.width), rectRight(area) - kx);
+    const y = Math.min(Math.max(box.y, area.y + ky - box.height), rectBottom(area) - ky);
+    const distance = (x - box.x) ** 2 + (y - box.y) ** 2;
+    if (distance < best) {
+      best = distance;
+      result = { x, y };
+    }
+    if (distance === 0) break;
+  }
+  return result;
+};
+
+/** 水平扫过的整段都必须被屏幕并集覆盖；无缝相邻屏可以接续，不能跳过空洞。 */
+export const horizontalSegmentCovered = (rects: Rect[], left: number, right: number, y: number): boolean => {
+  const row = rects.filter((r) => y >= r.y && y < rectBottom(r)).sort((a, b) => a.x - b.x);
+  let covered = left;
+  for (const r of row) {
+    if (r.x > covered) return false;
+    if (rectRight(r) > covered) covered = rectRight(r);
+    if (covered > right) return true;
+  }
+  return false;
+};
+
 /**
  * 显示器拓扑变化后重定位宠物中心：世界坐标守恒，只有点不落在任何屏上才夹到最近屏。
  * 参数与返回值都是新视口的相对坐标；视口原点随拓扑平移，直接拿旧坐标去夹会让宠物每次开合都漂一次。

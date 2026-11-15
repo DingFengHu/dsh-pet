@@ -6,7 +6,7 @@
  * @module dsh-pet/src/shared/motion
  */
 import { randomBetween } from './pickers.ts';
-import { rectAtPoint, rectBottom, rectRight } from './displays.ts';
+import { horizontalSegmentCovered, rectAtPoint, rectBottom, rectRight } from './displays.ts';
 import type { Corner, Rect } from './types.ts';
 
 /** 一次移动的几何参数（比例坐标）。 */
@@ -44,6 +44,16 @@ export const planMove = (o: {
     const bodyHalf = o.halfW - side;
     if (!rectAtPoint(o.areas, target - bodyHalf - o.margin, o.cy)) return null;
     if (!rectAtPoint(o.areas, target + bodyHalf + o.margin, o.cy)) return null;
+    // 终点可达不代表途中可达：漫游逐帧直线插值，整段身体宽度都不能穿过屏间空洞。
+    if (
+      !horizontalSegmentCovered(
+        o.areas,
+        Math.min(o.cx, target) - bodyHalf - o.margin,
+        Math.max(o.cx, target) + bodyHalf + o.margin,
+        o.cy,
+      )
+    )
+      return null;
   } else {
     // margin 语义 =「身体到屏幕边缘的安全距」：盒中心可到 margin + halfW - side（身体左缘 = margin）
     const leftBound = o.margin + o.halfW - side;
