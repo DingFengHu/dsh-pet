@@ -77,7 +77,7 @@ test('cron 初始历史不提醒，后续失败 sticky 跨成功与重启直到�
     assert.deepEqual(view(state).alerts, []);
     await alerts.accept(snapshot({ jobs: [job('new')] }));
     assert.equal(view(state).alerts.length, 2);
-    assert.equal(view(state).alerts[0]!.title, 'Hermes 需要你确认');
+    assert.equal(view(state).alerts[0]!.title, 'Hermes 中“未命名”的这个任务需要你批准');
     const cronId = view(state).alerts[1]!.id;
     await alerts.accept(snapshot({ decisions: [], jobs: [job('new', 'ok')] }));
     assert.equal(view(state).alerts[0]!.id, cronId);
@@ -262,7 +262,7 @@ test('外部提醒：显示原文、同 key 幂等、Hermes 快照折叠后仍�
         .slice(0, 2)
         .map((a) => a.title)
         .sort(),
-      ['Claude 要你做决定 · dsh-pet', 'Hermes 需要你确认'],
+      ['Claude 要你做决定 · dsh-pet', 'Hermes 中“未命名”的这个任务需要你批准'],
     );
     assert.equal(alerts1[2]!.title, 'Windows 计划任务失败 · Kofi');
     const claude = alerts1.find((a) => a.title.startsWith('Claude'))!;

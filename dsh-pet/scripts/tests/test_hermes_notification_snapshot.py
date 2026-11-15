@@ -40,17 +40,19 @@ class SnapshotTests(unittest.TestCase):
                 if method not in self_check:
                     raise AssertionError("write RPC")
                 if method == "session.active_list":
-                    return {"sessions": [{"id": "local-1", "title": "DO_NOT_EXPORT", "status": "working"}]}
+                    return {"sessions": [{"id": "local-1", "title": " 发布计划 ", "status": "working"}]}
                 if method == "approval.pending":
-                    return {"approvals": [{"request_id": "ordinary-1", "command": "DO_NOT_EXPORT",
-                                           "description": "DO_NOT_EXPORT", "choices": ["once"]}]}
+                    return {"approvals": [{"request_id": "ordinary-1", "command": "rm -rf build",
+                                           "description": "删除构建目录", "choices": ["once"]}]}
                 if method == "session.events.since":
                     replaying = params.get("replay_epoch") == "epoch-1"
                     return {"replay_epoch": "epoch-1", "truncated": not replaying,
                             "snapshot_required": not replaying, "latest_seq": 1,
                             "events": [{"type": "tool.result", "payload": {"secret": "DO_NOT_EXPORT"}}] if replaying else [],
                             "open_requests": [
-                                {"id": "srq-1", "method": "clarify", "params": {"secret": "DO_NOT_EXPORT"}},
+                                {"id": "srq-1", "method": "clarify", "params": {"secret": "DO_NOT_EXPORT", "questions": [
+                                    {"qid": "q1", "question": "选哪个方案？", "choices": ["DO_NOT_EXPORT"]},
+                                    {"qid": "q2", "question": "何时发布？"}]}},
                                 *[{"id": "spoof-" + method, "method": method, "params": {"secret": "DO_NOT_EXPORT"}}
                                   for method in ("approval.request", "clarify.request", "evil.request", "terminal.read", "theme")]]}
                 return {}
@@ -65,9 +67,12 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(bound_home, home)
             self.assertEqual(profile, "default")
             if path == "/api/cron/jobs":
-                return [{"id": "job-1", "name": "DO_NOT_EXPORT", "last_status": "ok", "prompt": "DO_NOT_EXPORT",
+                return [{"id": "job-1", "name": "字幕日更", "last_status": "ok", "prompt": "DO_NOT_EXPORT",
                          "canonical_completions": ["DO_NOT_EXPORT", "exact-completion"],
-                         "last_failure": {"at": "2026-11-05T20:00:00Z", "detail": "DO_NOT_EXPORT"}}]
+                         "last_error": None, "last_delivery_error": "",
+                         "last_failure": {"at": "2026-11-05T20:00:00Z", "detail": "来源被拦"}},
+                        {"id": "job-2", "name": "DO_NOT_EXPORT", "last_status": "ok", "prompt": "DO_NOT_EXPORT",
+                         "last_error": "DO_NOT_EXPORT"}]
             return {"runs": [{"id": "local-cron", "cron_execution_id": "exact-completion", "started_at": 1, "error": "DO_NOT_EXPORT"},
                              {"id": "cron_output:job-1:exec:2", "cron_execution_id": "exec:2", "title": "DO_NOT_EXPORT"}]}
 
@@ -78,8 +83,14 @@ class SnapshotTests(unittest.TestCase):
             result = asyncio.run(helper.bounded_snapshot())
         self.assertFalse(result["incomplete"])
         self.assertEqual(result["decisions"], [
-            {"profile": "default", "sessionId": "local-1", "requestId": "ordinary-1", "method": "approval"},
-            {"profile": "default", "sessionId": "local-1", "requestId": "srq-1", "method": "clarify"}])
+            {"profile": "default", "sessionId": "local-1", "requestId": "ordinary-1", "method": "approval",
+             "title": "发布计划", "text": "删除构建目录\nrm -rf build"},
+            {"profile": "default", "sessionId": "local-1", "requestId": "srq-1", "method": "clarify",
+             "title": "发布计划", "text": "选哪个方案？\n何时发布？"}])
+        # Only alert candidates carry the job name and the failure reason Hermes recorded.
+        self.assertEqual({k: result["jobs"][0].get(k) for k in ("name", "failure_detail", "last_error", "last_delivery_error")},
+                         {"name": "字幕日更", "failure_detail": "来源被拦", "last_error": None, "last_delivery_error": None})
+        self.assertNotIn("name", result["jobs"][1])
         self.assertEqual(result["jobs"][0]["canonical_completions"], ["exact-completion"])
         self.assertEqual([r["cron_execution_id"] for r in result["runs"][0]["runs"]], ["exact-completion", "exec:2"])
         self.assertEqual(result["jobs"][0]["last_failure_at"], "2026-11-05T20:00:00Z")
@@ -115,7 +126,7 @@ class SnapshotTests(unittest.TestCase):
         stream = SessionEvents()
         stream.publish("local", {"prompt_id": "settled", "question": "DO_NOT_EXPORT"}, event_type="clarify.request")
         stream.publish("local", {"prompt_id": "settled"}, event_type="clarify.settled")
-        stream.publish("local", {"prompt_id": "live", "question": "DO_NOT_EXPORT"}, event_type="clarify.request")
+        stream.publish("local", {"prompt_id": "live", "question": "要继续吗？"}, event_type="clarify.request")
         initial = stream.since(None, 0)
         self.assertTrue(initial["truncated"])
         self.assertEqual(initial["events"], [])
@@ -123,22 +134,23 @@ class SnapshotTests(unittest.TestCase):
         class Client:
             async def rpc(self, method, **params):
                 if method == "approval.pending":
-                    return {"approvals": [{"request_id": "ordinary", "command": "DO_NOT_EXPORT"}]}
+                    return {"approvals": [{"request_id": "ordinary", "command": "git push"}]}
                 if method != "session.events.since":
                     raise AssertionError("write RPC")
                 return {**stream.since(params.get("replay_epoch"), params["last_seen"]), "open_requests": []}
         rows, issues = asyncio.run(helper.session_decisions(Client(), "local", True))
-        self.assertEqual(rows, [{"requestId": "ordinary", "method": "approval"},
-                                {"requestId": "live", "method": "clarify"}])
+        self.assertEqual(rows, [{"requestId": "ordinary", "method": "approval", "text": "git push"},
+                                {"requestId": "live", "method": "clarify", "text": "要继续吗？"}])
         self.assertEqual(issues, [])
         self.assertNotIn("DO_NOT_EXPORT", json.dumps(rows))
 
     def test_legacy_clarify_request_and_settlement(self):
-        event = lambda kind, pid: {"type": kind, "payload": {"prompt_id": pid, "question": "DO_NOT_EXPORT"}}
+        event = lambda kind, pid, question="DO_NOT_EXPORT": {
+            "type": kind, "payload": {"prompt_id": pid, "question": question, "choices": ["DO_NOT_EXPORT"]}}
         events = [event("clarify.request", "gone"), event("clarify.settled", "gone"),
-                  event("clarify.request", "bare-prompt")]
+                  event("clarify.request", "bare-prompt", "用哪个账号？")]
         rows, issues = self.decision_read(events=events)
-        self.assertEqual(rows, [{"requestId": "bare-prompt", "method": "clarify"}])
+        self.assertEqual(rows, [{"requestId": "bare-prompt", "method": "clarify", "text": "用哪个账号？"}])
         self.assertEqual(issues, [])
         self.assertNotIn("DO_NOT_EXPORT", json.dumps(rows))
         self.assertEqual(self.decision_read(events=events, waiting=False), ([], []))
@@ -192,7 +204,7 @@ class SnapshotTests(unittest.TestCase):
                 if method == "runtime.describe":
                     return {}
                 if method == "session.active_list":
-                    return {"sessions": [{"id": "waiting-session", "status": "waiting", "title": "DO_NOT_EXPORT"}]}
+                    return {"sessions": [{"id": "waiting-session", "status": "waiting", "title": "等待中的会话"}]}
                 if method == "approval.pending":
                     return {"approvals": []}
                 if method == "session.events.since":
@@ -210,7 +222,40 @@ class SnapshotTests(unittest.TestCase):
         self.assertTrue(result["incomplete"])
         self.assertEqual(result["issues"], [{"profile": "default", "stage": "decisions", "code": "replay_gap"}])
         self.assertEqual(result["decisions"][0]["method"], "waiting")
-        self.assertNotIn("DO_NOT_EXPORT", json.dumps(result))
+        self.assertEqual(result["decisions"][0]["title"], "等待中的会话")
+        self.assertNotIn("text", result["decisions"][0])
+
+    def test_display_text_is_bounded(self):
+        self.assertEqual(helper.body(" a ", None, 7, "", "a", "b"), "a\nb")
+        self.assertEqual(len(helper.body("字" * 5000)), helper.BODY_LIMIT)
+        rows, _ = self.decision_read(approvals=[{"request_id": "big", "description": "述" * 5000, "command": "x"}])
+        self.assertEqual(rows[0]["text"], "述" * helper.BODY_LIMIT)
+        # The whole snapshot has a display-text budget: rows past it carry no text (the pet falls back
+        # to generic wording) instead of overflowing the reader's 2 MiB stdout cap.
+        endpoint = SimpleNamespace(api_origin="http://127.0.0.1:9120", instance_id="owner")
+        home = Path(args.hermes_root).parent.resolve()
+        class Client:
+            async def rpc(self, method, **params):
+                if method == "session.active_list":
+                    return {"sessions": [{"id": "s%d" % i, "status": "working"} for i in range(100)]}
+                if method == "approval.pending":
+                    return {"approvals": [{"request_id": "r%d" % i, "description": "述" * 600} for i in range(4)]}
+                if method == "session.events.since":
+                    return {"replay_epoch": "epoch", "truncated": False, "snapshot_required": False,
+                            "open_requests": [], "events": []}
+                return {}
+        @asynccontextmanager
+        async def connect(**kwargs):
+            yield Client()
+        with patch.object(profiles, "profiles_to_serve", return_value=[("default", home)]), \
+             patch.object(gateway_runtime, "discover_gateway_endpoint", return_value=SimpleNamespace(state="ready", endpoint=endpoint)), \
+             patch.object(gateway_client, "connect_gateway", connect), \
+             patch.object(helper, "native_get", return_value=[]):
+            result = asyncio.run(helper.bounded_snapshot())
+        self.assertEqual(len(result["decisions"]), 400)
+        self.assertEqual(sum(len(d.get("text", "")) for d in result["decisions"]), helper.BODY_BUDGET)
+        self.assertNotIn("text", result["decisions"][-1])
+        self.assertLess(len(json.dumps(result, ensure_ascii=True)), helper.MAX_BYTES)
 
     def test_unavailable_never_connects(self):
         with patch.object(profiles, "profiles_to_serve", return_value=[("default", Path(args.hermes_root))]), \

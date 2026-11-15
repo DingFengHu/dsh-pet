@@ -1,8 +1,14 @@
-/** Hermes 快照边界与提醒折叠，只输出固定安全文案，不传递请求参数或错误详情。 */
+/**
+ * Hermes 快照边界与提醒折叠。标题带对话名或任务名，正文是 Hermes 自己卡片上已脱敏的问题、
+ * 审批说明或失败原因（2026-11-14 起，与 Claude 提醒同款）；认证票据、任务提示词与异常原文仍不传递。
+ */
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 const text = z.string().max(256);
+/** helper 按码点截断，这里按 UTF-16 留一倍余量，折叠时再截到显示长度。 */
+const label = z.string().max(512);
+const body = z.string().max(2048);
 const profile = text.min(1);
 const row = z.object({ profile });
 const storedId = z
@@ -17,7 +23,18 @@ export const alertId = z
 /** 跨进程快照只保留提醒所需投影，数组均有上限。 */
 export const snapshotSchema = z.object({
   profiles: z.array(z.object({ name: profile, available: z.boolean(), baseUrl: text.optional() })).max(32),
-  decisions: z.array(row.extend({ sessionId: text, requestId: text, method: text })).max(512),
+  decisions: z
+    .array(
+      row.extend({
+        sessionId: text,
+        requestId: text,
+        method: text,
+        /** 会话标题与等待处理的内容（问题原文、审批说明），缺失时退回泛化文案。 */
+        title: label.optional(),
+        text: body.optional(),
+      }),
+    )
+    .max(512),
   jobs: z
     .array(
       row.extend({
@@ -25,6 +42,11 @@ export const snapshotSchema = z.object({
         last_status: text.nullish(),
         last_run_at: z.union([text, z.number()]).nullish(),
         last_failure_at: text.optional(),
+        /** 任务名与失败原因，只有提醒候选任务才带原因。 */
+        name: label.nullish(),
+        failure_detail: body.optional(),
+        last_error: body.optional(),
+        last_delivery_error: body.optional(),
         canonical_completions: z.array(text).max(512).optional(),
       }),
     )
@@ -56,14 +78,17 @@ const huniuPendingSchema = z
     at: z.number().finite(),
   })
   .strict();
-/** Hermes 自身提醒只用固定文案。 */
+/** 等待处理的请求缺正文、定时任务缺失败原因时的兜底文案。 */
+export const DECISION_FALLBACK = '有一项请求等待处理，请查看对话。';
+export const CRON_FALLBACK = '有一次定时任务执行失败，请查看 Hermes。';
+/** Hermes 自身提醒：标题带对话名或任务名，正文是问题原文、审批说明或失败原因。旧状态文件里的固定文案同样合法。 */
 const hermesPendingSchema = z
   .object({
     id: alertId,
     profile,
     kind: z.enum(['decision', 'cron']),
-    title: z.enum(['Hermes 需要你确认', 'Hermes 定时任务失败']),
-    message: z.enum(['有一项请求等待处理，请查看对话。', '有一次定时任务执行失败，请查看 Hermes。']),
+    title: z.string().min(1).max(200),
+    message: z.string().min(1).max(4096),
     sessionId: storedId.optional(),
   })
   .strict();
@@ -108,6 +133,17 @@ export function makeAlertId(kind: 'decision' | 'cron' | 'huniu' | ExternalKind, 
 function validSession(value: string | null | undefined): string | undefined {
   return typeof value === 'string' && storedId.safeParse(value).success ? value : undefined;
 }
+
+/** 统一换行、去掉 Discord 提及标记并截断到显示长度。 */
+function clip(value: string | null | undefined, limit: number): string {
+  const cleaned = (value ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/<@[!&]?\d+>/g, '')
+    .trim();
+  return cleaned.length > limit ? `${cleaned.slice(0, limit - 1)}…` : cleaned;
+}
+
+const DECISION_NEED: Record<string, string> = { approval: '需要你批准', clarify: '需要你决定' };
 
 const KIND_ORDER = {
   decision: 0,
@@ -171,8 +207,8 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
         id,
         profile: decision.profile,
         kind: 'decision',
-        title: 'Hermes 需要你确认',
-        message: '有一项请求等待处理，请查看对话。',
+        title: `Hermes 中“${clip(decision.title, 80) || '未命名'}”的这个任务${DECISION_NEED[decision.method] ?? '需要你处理'}`,
+        message: clip(decision.text, 1200) || DECISION_FALLBACK,
         ...(sessionId ? { sessionId } : {}),
       });
   }
@@ -199,7 +235,24 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
         dismissed.add(id);
         continue;
       }
-      if (dismissed.has(id) || pending.has(id)) continue;
+      if (dismissed.has(id)) continue;
+      const name = clip(job.name, 80);
+      const reason =
+        failure.kind === 'failure'
+          ? job.failure_detail
+          : failure.kind === 'delivery_failed'
+            ? job.last_delivery_error || job.last_error
+            : job.last_error || job.last_delivery_error;
+      const words = {
+        title: name ? `Hermes 定时任务失败 · ${name}` : 'Hermes 定时任务失败',
+        message: clip(reason, 1200) || CRON_FALLBACK,
+      };
+      const existing = pending.get(id);
+      if (existing) {
+        // 同一次失败只补全文字（升级前留下的固定文案、上一轮没读到原因），会话关联保持首次判定。
+        if (existing.kind === 'cron' && words.message !== CRON_FALLBACK) pending.set(id, { ...existing, ...words });
+        continue;
+      }
       const completions = job.canonical_completions;
       const executionId = completions?.[completions.length - 1];
       // 只有当前 canonical completion 的不可变 execution ID 能证明 session 归属。
@@ -216,8 +269,7 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
         id,
         profile: job.profile,
         kind: 'cron',
-        title: 'Hermes 定时任务失败',
-        message: '有一次定时任务执行失败，请查看 Hermes。',
+        ...words,
         ...(sessionId ? { sessionId } : {}),
       });
     }

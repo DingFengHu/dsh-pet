@@ -1,7 +1,16 @@
 /** Hermes helper 契约、安全深链及不可猜测的 cron 运行映射回归。 */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { alertView, foldSnapshot, makeAlertId, snapshotSchema, type HermesDisk } from './hermes-policy.ts';
+import {
+  alertView,
+  CRON_FALLBACK,
+  DECISION_FALLBACK,
+  diskSchema,
+  foldSnapshot,
+  makeAlertId,
+  snapshotSchema,
+  type HermesDisk,
+} from './hermes-policy.ts';
 
 const disk = (): HermesDisk => ({ stateVersion: 1, dismissed: [], pending: [], baselineProfiles: ['default'] });
 const snapshot = (extra: Record<string, unknown> = {}) =>
@@ -47,6 +56,96 @@ test('只接受 canonical approval.pending/open_requests 的 bare approval 和 c
   );
 });
 
+test('等待处理的提醒与 Claude 同款：标题带对话名和要做的事，正文是问题或审批原文', () => {
+  const decision = (method: string, extra: Record<string, unknown> = {}) => ({
+    profile: 'default',
+    sessionId: 'session-1',
+    requestId: method,
+    method,
+    ...extra,
+  });
+  const next = foldSnapshot(
+    disk(),
+    snapshot({
+      decisions: [
+        decision('approval', { title: '发布计划', text: '删除构建目录\r\nrm -rf build' }),
+        decision('clarify', { title: '  ', text: '选哪个方案？\n何时发布？' }),
+      ],
+    }),
+  );
+  const shown = new Map(next.pending.map((entry) => [entry.id, alertView(entry)]));
+  assert.deepEqual(
+    ['approval', 'clarify'].map((method) => {
+      const view = shown.get(makeAlertId('decision', ['default', 'session-1', method]))!;
+      return [view.title, view.message, view.url];
+    }),
+    [
+      ['Hermes 中“发布计划”的这个任务需要你批准', '删除构建目录\nrm -rf build', 'hermes://open/session-1'],
+      ['Hermes 中“未命名”的这个任务需要你决定', '选哪个方案？\n何时发布？', 'hermes://open/session-1'],
+    ],
+  );
+  // 同一请求后来读到正文就补上；标题、正文超长截断，不让整份状态过不了校验。
+  const bare = foldSnapshot(disk(), snapshot({ decisions: [decision('clarify')] }));
+  assert.equal(bare.pending[0]!.message, DECISION_FALLBACK);
+  const filled = foldSnapshot(
+    bare,
+    snapshot({ decisions: [decision('clarify', { title: '题'.repeat(500), text: '问'.repeat(2000) })] }),
+  );
+  assert.equal(filled.pending.length, 1);
+  assert.equal(filled.pending[0]!.id, bare.pending[0]!.id);
+  assert.equal(filled.pending[0]!.message, '问'.repeat(1199) + '…');
+  assert.ok(filled.pending[0]!.title.length <= 200);
+  assert.ok(filled.pending[0]!.title.endsWith('…”的这个任务需要你决定'));
+});
+
+test('定时任务失败与 Claude 同款：标题带任务名，正文是 Hermes 记录的失败原因', () => {
+  const named = { ...job, name: '字幕日更', failure_detail: '<@819671906382643210>\n来源被拦 **BLOCKED_SOURCE**' };
+  const first = foldSnapshot(disk(), snapshot({ jobs: [named], runs }));
+  assert.deepEqual(
+    [first.pending[0]!.title, first.pending[0]!.message],
+    ['Hermes 定时任务失败 · 字幕日更', '来源被拦 **BLOCKED_SOURCE**'],
+  );
+  // 投递失败、配置被拦用各自那次运行的错误，不拿旧的 agent 失败原因顶替。
+  const delivery = foldSnapshot(
+    disk(),
+    snapshot({
+      jobs: [
+        {
+          ...named,
+          last_failure_at: '',
+          last_status: 'delivery_failed',
+          last_error: 'agent 错误',
+          last_delivery_error: 'Discord 403',
+        },
+      ],
+    }),
+  );
+  assert.equal(delivery.pending[0]!.message, 'Discord 403');
+  // 没有任务名、没有原因时退回原来的泛化文案。
+  const bare = foldSnapshot(disk(), snapshot({ jobs: [job], runs }));
+  assert.deepEqual([bare.pending[0]!.title, bare.pending[0]!.message], ['Hermes 定时任务失败', CRON_FALLBACK]);
+  // 升级前留下的固定文案在下一轮快照补成原文，id 与会话链接不变；读不到原因时不把已有原文冲掉。
+  const upgraded = foldSnapshot(bare, snapshot({ jobs: [named] }));
+  assert.equal(upgraded.pending.length, 1);
+  assert.deepEqual(
+    [upgraded.pending[0]!.id, upgraded.pending[0]!.title, upgraded.pending[0]!.message],
+    [bare.pending[0]!.id, 'Hermes 定时任务失败 · 字幕日更', '来源被拦 **BLOCKED_SOURCE**'],
+  );
+  assert.equal(alertView(upgraded.pending[0]!).url, 'hermes://open/session-1');
+  assert.deepEqual(foldSnapshot(upgraded, snapshot({ jobs: [job] })).pending, upgraded.pending);
+});
+
+test('旧版固定文案的状态文件仍能读入', () => {
+  const id = makeAlertId('decision', ['default', 'session-1', 'old']);
+  const legacy = {
+    stateVersion: 1,
+    dismissed: [],
+    pending: [{ id, profile: 'default', kind: 'decision', title: 'Hermes 需要你确认', message: DECISION_FALLBACK }],
+    baselineProfiles: ['default'],
+  };
+  assert.equal(diskSchema.parse(legacy).pending[0]!.title, 'Hermes 需要你确认');
+});
+
 test('真实等待但重放缺口用稳定泛化提醒，缺口恢复后清除，不接收无证据 waiting', () => {
   const decision = {
     profile: 'default',
@@ -61,6 +160,10 @@ test('真实等待但重放缺口用稳定泛化提醒，缺口恢复后清除�
   });
   const first = foldSnapshot(disk(), gap);
   assert.equal(first.pending.length, 1);
+  assert.deepEqual(
+    [first.pending[0]!.title, first.pending[0]!.message],
+    ['Hermes 中“未命名”的这个任务需要你处理', DECISION_FALLBACK],
+  );
   assert.equal(foldSnapshot(first, gap).pending[0]!.id, first.pending[0]!.id);
   assert.equal(foldSnapshot(first, snapshot()).pending.length, 0);
   assert.equal(foldSnapshot(disk(), snapshot({ decisions: [decision] })).pending.length, 0);
