@@ -4,6 +4,12 @@ No ensure/start, activate/resume, approval answers, migration, or raw state/log 
 Native HTTP tickets are same-user, single-use, purpose='native-http', profile-bound.
 Run history is the canonical REST projection (sessions plus script-only executions),
 not proof of failure by itself. Only genuine session rows provide a chat target.
+
+Exported display text is limited to what Hermes itself shows the user: the session title, the
+pending question / approval description, the cron job name and the failure reason Hermes recorded
+for it (which may be an error message). All of it passes Hermes's own secret redaction first and is
+dropped if that pass is unavailable. Prompts, clarify choices, tickets, tool payloads and this
+helper's own exceptions never leave it.
 """
 from __future__ import annotations
 
@@ -26,10 +32,36 @@ MAX_SESSIONS = 128
 MAX_JOBS = 256
 MAX_TOTAL_ROWS = 512
 RUN_LIMIT = 5
+TITLE_LIMIT = 160
+BODY_LIMIT = 600
+# Whole-snapshot cap on display text: the JSON is ASCII-escaped and the reader stops at 2 MiB.
+BODY_BUDGET = 120_000
 
 
 def text(value, limit=256):
     return value[:limit] if isinstance(value, str) else ""
+
+
+def redacted(value):
+    """Hermes's own secret redaction, forced on. Cron errors are raw ``str(e)`` and a batch clarify
+    question is forwarded as asked, so nothing is displayed unless this pass ran."""
+    try:
+        from agent.redact import redact_sensitive_text
+        return redact_sensitive_text(value, force=True, redact_url_credentials=True)
+    except Exception:
+        return ""
+
+
+def body(*parts, limit=BODY_LIMIT):
+    """Display text joined from the non-empty, distinct string parts: redacted, then bounded
+    (a cut is marked with an ellipsis so a clipped command never reads as the whole one)."""
+    seen = []
+    for part in parts:
+        part = redacted(part).strip() if isinstance(part, str) and part.strip() else ""
+        if part and part not in seen:
+            seen.append(part)
+    joined = "\n".join(seen)
+    return joined if len(joined) <= limit else joined[:limit - 1] + "…"
 
 
 def subset(row, keys):
@@ -66,14 +98,17 @@ def native_get(home, endpoint, path, profile):
 async def session_decisions(client, sid, waiting):
     """Passive canonical approvals, supported server requests, then legacy clarify replay."""
     found = {}
+    shown = {}
     issues = []
     epoch = ""
     gap = False
 
-    def add(rid, method):
+    def add(rid, method, display=""):
         if isinstance(rid, str) and rid:
             if len(found) < 64:
                 found.setdefault(text(rid), method)
+                if display:
+                    shown.setdefault(text(rid), display)
             else:
                 issues.append("limit_reached")
 
@@ -86,7 +121,7 @@ async def session_decisions(client, sid, waiting):
             issues.append("limit_reached")
         for item in pending[:64]:
             if isinstance(item, dict):
-                add(item.get("request_id"), "approval")
+                add(item.get("request_id"), "approval", body(item.get("description"), item.get("command")))
     except Exception:
         issues.append("approval_read_failed")
         gap = True
@@ -106,7 +141,13 @@ async def session_decisions(client, sid, waiting):
         for request in requests[:64]:
             # These are server request verbs, NOT arbitrary *.request event names.
             if isinstance(request, dict) and request.get("method") in ("approval", "clarify"):
-                add(request.get("id"), request["method"])
+                params = request.get("params")
+                params = params if isinstance(params, dict) else {}
+                questions = params.get("questions")
+                add(request.get("id"), request["method"], body(
+                    params.get("description"), params.get("command"), params.get("question"),
+                    *(q.get("question") for q in (questions if isinstance(questions, list) else [])[:5]
+                      if isinstance(q, dict))))
         current_epoch = text(replay.get("replay_epoch"))
         replay_gap = (current_epoch != epoch or replay.get("truncated") is not False
                       or replay.get("snapshot_required") is not False)
@@ -126,11 +167,11 @@ async def session_decisions(client, sid, waiting):
                 if not isinstance(pid, str) or not pid:
                     continue
                 if event.get("type") == "clarify.request":
-                    pending_clarify[pid] = True
+                    pending_clarify[pid] = body(payload.get("question"))
                 elif event.get("type") == "clarify.settled":
                     pending_clarify.pop(pid, None)
-            for pid in pending_clarify:
-                add(pid, "clarify")
+            for pid, question in pending_clarify.items():
+                add(pid, "clarify", question)
     except Exception:
         issues.append("replay_read_failed")
         gap = True
@@ -140,7 +181,8 @@ async def session_decisions(client, sid, waiting):
         if waiting and not found:
             stable = hashlib.sha256(json.dumps([sid, epoch]).encode()).hexdigest()[:32]
             add("waiting:" + stable, "waiting")
-    return [{"requestId": rid, "method": method} for rid, method in found.items()], issues
+    return [{"requestId": rid, "method": method, **({"text": shown[rid]} if rid in shown else {})}
+            for rid, method in found.items()], issues
 
 
 async def snapshot():
@@ -156,6 +198,17 @@ async def snapshot():
         out["incomplete"] = True
         if len(out["issues"]) < 128:
             out["issues"].append({"profile": profile, "stage": stage, "code": code})
+
+    budget = BODY_BUDGET
+
+    def spend(value):
+        """Charge display text (titles and names included) against the snapshot budget; text that no
+        longer fits is dropped whole and the row falls back to generic wording."""
+        nonlocal budget
+        if len(value) > budget:
+            return ""
+        budget -= len(value)
+        return value
 
     profiles = profiles_to_serve(True, include_standalone=True, include_parked=True)
     if len(profiles) > MAX_PROFILES:
@@ -191,6 +244,7 @@ async def snapshot():
                     if not isinstance(session, dict) or not isinstance(session.get("id"), str):
                         continue
                     sid = session["id"]
+                    title = body(session.get("title"), limit=TITLE_LIMIT)
                     decisions, codes = await session_decisions(client, sid, session.get("status") == "waiting")
                     for code in set(codes):
                         issue(name, "decisions", code)
@@ -198,7 +252,11 @@ async def snapshot():
                         if len(out["decisions"]) >= MAX_TOTAL_ROWS:
                             issue(name, "decisions", "limit_reached")
                             break
-                        out["decisions"].append({"profile": name, "sessionId": text(sid), **decision})
+                        shown = spend(decision.pop("text", ""))
+                        heading = spend(title)
+                        out["decisions"].append({"profile": name, "sessionId": text(sid), **decision,
+                                                 **({"title": heading} if heading else {}),
+                                                 **({"text": shown} if shown else {})})
                 record["available"] = True
             try:
                 jobs = await asyncio.to_thread(native_get, home, endpoint, "/api/cron/jobs", name)
@@ -224,6 +282,14 @@ async def snapshot():
                     # Only alert candidates need chat resolution. Healthy jobs need no history I/O.
                     if not safe["last_failure_at"] and job.get("last_status") not in ("error", "failed", "delivery_failed", "blocked_config"):
                         continue
+                    # The job name and the reason Hermes recorded for the failure, for the bubble.
+                    for key, value, limit in (
+                            ("name", job.get("name"), TITLE_LIMIT),
+                            ("failure_detail", failure.get("detail") if isinstance(failure, dict) else None, BODY_LIMIT),
+                            ("last_error", job.get("last_error"), BODY_LIMIT),
+                            ("last_delivery_error", job.get("last_delivery_error"), BODY_LIMIT)):
+                        if shown := spend(body(value, limit=limit)):
+                            safe[key] = shown
                     try:
                         history = await asyncio.to_thread(native_get, home, endpoint,
                             "/api/cron/jobs/" + quote(job["id"], safe="") + "/runs?limit=" + str(RUN_LIMIT), name)
