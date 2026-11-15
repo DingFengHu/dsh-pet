@@ -6,8 +6,10 @@ Run history is the canonical REST projection (sessions plus script-only executio
 not proof of failure by itself. Only genuine session rows provide a chat target.
 
 Exported display text is limited to what Hermes itself shows the user: the session title, the
-pending question / approval description (already redacted by the owner), the cron job name and its
-recorded failure reason. Prompts, tickets, tool payloads and exception text never leave this helper.
+pending question / approval description, the cron job name and the failure reason Hermes recorded
+for it (which may be an error message). All of it passes Hermes's own secret redaction first and is
+dropped if that pass is unavailable. Prompts, clarify choices, tickets, tool payloads and this
+helper's own exceptions never leave it.
 """
 from __future__ import annotations
 
@@ -40,14 +42,26 @@ def text(value, limit=256):
     return value[:limit] if isinstance(value, str) else ""
 
 
+def redacted(value):
+    """Hermes's own secret redaction, forced on. Cron errors are raw ``str(e)`` and a batch clarify
+    question is forwarded as asked, so nothing is displayed unless this pass ran."""
+    try:
+        from agent.redact import redact_sensitive_text
+        return redact_sensitive_text(value, force=True, redact_url_credentials=True)
+    except Exception:
+        return ""
+
+
 def body(*parts, limit=BODY_LIMIT):
-    """Display text joined from the non-empty, distinct string parts, bounded."""
+    """Display text joined from the non-empty, distinct string parts: redacted, then bounded
+    (a cut is marked with an ellipsis so a clipped command never reads as the whole one)."""
     seen = []
     for part in parts:
-        part = part.strip() if isinstance(part, str) else ""
+        part = redacted(part).strip() if isinstance(part, str) and part.strip() else ""
         if part and part not in seen:
             seen.append(part)
-    return "\n".join(seen)[:limit]
+    joined = "\n".join(seen)
+    return joined if len(joined) <= limit else joined[:limit - 1] + "…"
 
 
 def subset(row, keys):
@@ -188,9 +202,11 @@ async def snapshot():
     budget = BODY_BUDGET
 
     def spend(value):
-        """Charge display text against the snapshot budget; past it rows fall back to generic wording."""
+        """Charge display text (titles and names included) against the snapshot budget; text that no
+        longer fits is dropped whole and the row falls back to generic wording."""
         nonlocal budget
-        value = value[:max(budget, 0)]
+        if len(value) > budget:
+            return ""
         budget -= len(value)
         return value
 
@@ -237,8 +253,9 @@ async def snapshot():
                             issue(name, "decisions", "limit_reached")
                             break
                         shown = spend(decision.pop("text", ""))
+                        heading = spend(title)
                         out["decisions"].append({"profile": name, "sessionId": text(sid), **decision,
-                                                 **({"title": title} if title else {}),
+                                                 **({"title": heading} if heading else {}),
                                                  **({"text": shown} if shown else {})})
                 record["available"] = True
             try:
@@ -266,11 +283,12 @@ async def snapshot():
                     if not safe["last_failure_at"] and job.get("last_status") not in ("error", "failed", "delivery_failed", "blocked_config"):
                         continue
                     # The job name and the reason Hermes recorded for the failure, for the bubble.
-                    safe["name"] = body(job.get("name"), limit=TITLE_LIMIT)
-                    for key, value in (("failure_detail", failure.get("detail") if isinstance(failure, dict) else None),
-                                       ("last_error", job.get("last_error")),
-                                       ("last_delivery_error", job.get("last_delivery_error"))):
-                        if shown := spend(body(value)):
+                    for key, value, limit in (
+                            ("name", job.get("name"), TITLE_LIMIT),
+                            ("failure_detail", failure.get("detail") if isinstance(failure, dict) else None, BODY_LIMIT),
+                            ("last_error", job.get("last_error"), BODY_LIMIT),
+                            ("last_delivery_error", job.get("last_delivery_error"), BODY_LIMIT)):
+                        if shown := spend(body(value, limit=limit)):
                             safe[key] = shown
                     try:
                         history = await asyncio.to_thread(native_get, home, endpoint,

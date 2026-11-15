@@ -134,13 +134,14 @@ function validSession(value: string | null | undefined): string | undefined {
   return typeof value === 'string' && storedId.safeParse(value).success ? value : undefined;
 }
 
-/** 统一换行、去掉 Discord 提及标记并截断到显示长度。 */
+/** 统一换行，去掉 Discord 提及和 Hermes 的 `[blocked_config…]` 控制标记，截断到显示长度（不切开代理对）。 */
 function clip(value: string | null | undefined, limit: number): string {
   const cleaned = (value ?? '')
     .replace(/\r\n?/g, '\n')
     .replace(/<@[!&]?\d+>/g, '')
+    .replace(/\[blocked_config[^\]]*\]\s*/g, '')
     .trim();
-  return cleaned.length > limit ? `${cleaned.slice(0, limit - 1)}…` : cleaned;
+  return cleaned.length > limit ? `${cleaned.slice(0, limit - 1).replace(/[\uD800-\uDBFF]$/, '')}…` : cleaned;
 }
 
 const DECISION_NEED: Record<string, string> = { approval: '需要你批准', clarify: '需要你决定' };
@@ -223,9 +224,11 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
       typeof runAt === 'number'
         ? Number.isFinite(runAt) && runAt > 0
         : typeof runAt === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(runAt) && Number.isFinite(Date.parse(runAt));
+    // Hermes 给配置被拦、投递失败的那次运行也记一条同时间戳的 sticky failure：同一次运行只提醒一条。
+    const sameRun = !!job.last_failure_at && String(runAt) === job.last_failure_at;
     if (
       trustworthyRunAt &&
-      (['delivery_failed', 'blocked_config'].includes(status) ||
+      ((['delivery_failed', 'blocked_config'].includes(status) && !sameRun) ||
         (!job.last_failure_at && ['error', 'failed'].includes(status)))
     )
       failures.push({ at: String(runAt), kind: status });
@@ -249,8 +252,14 @@ export function foldSnapshot(previous: HermesDisk, snapshot: HermesSnapshot): He
       };
       const existing = pending.get(id);
       if (existing) {
-        // 同一次失败只补全文字（升级前留下的固定文案、上一轮没读到原因），会话关联保持首次判定。
-        if (existing.kind === 'cron' && words.message !== CRON_FALLBACK) pending.set(id, { ...existing, ...words });
+        // 同一次失败只补全文字（升级前留下的固定文案、上一轮没读到名字或原因），读不到的不冲掉已有的；
+        // 会话关联保持首次判定。
+        if (existing.kind === 'cron')
+          pending.set(id, {
+            ...existing,
+            ...(name ? { title: words.title } : {}),
+            ...(words.message !== CRON_FALLBACK ? { message: words.message } : {}),
+          });
         continue;
       }
       const completions = job.canonical_completions;

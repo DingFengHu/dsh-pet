@@ -121,6 +121,27 @@ test('定时任务失败与 Claude 同款：标题带任务名，正文是 Herme
     }),
   );
   assert.equal(delivery.pending[0]!.message, 'Discord 403');
+  // 配置被拦的那次运行同时记了同时间戳的 sticky failure：只提醒一条，并去掉 Hermes 的控制标记。
+  const blocked = foldSnapshot(
+    disk(),
+    snapshot({
+      jobs: [
+        {
+          ...named,
+          last_status: 'blocked_config',
+          failure_detail: "[blocked_config:silent] delivery platform 'weixin' has no credentials",
+          last_error: "[blocked_config:silent] delivery platform 'weixin' has no credentials",
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    blocked.pending.map((entry) => entry.message),
+    ["delivery platform 'weixin' has no credentials"],
+  );
+  // 截断不切开 emoji。
+  const emoji = foldSnapshot(disk(), snapshot({ jobs: [{ ...job, name: 'a'.repeat(78) + '😀' + 'b'.repeat(10) }] }));
+  assert.equal(emoji.pending[0]!.title, `Hermes 定时任务失败 · ${'a'.repeat(78)}…`);
   // 没有任务名、没有原因时退回原来的泛化文案。
   const bare = foldSnapshot(disk(), snapshot({ jobs: [job], runs }));
   assert.deepEqual([bare.pending[0]!.title, bare.pending[0]!.message], ['Hermes 定时任务失败', CRON_FALLBACK]);
@@ -133,6 +154,12 @@ test('定时任务失败与 Claude 同款：标题带任务名，正文是 Herme
   );
   assert.equal(alertView(upgraded.pending[0]!).url, 'hermes://open/session-1');
   assert.deepEqual(foldSnapshot(upgraded, snapshot({ jobs: [job] })).pending, upgraded.pending);
+  // 只读到任务名、没读到原因：标题补上名字，正文保持兜底文案。
+  const nameOnly = foldSnapshot(bare, snapshot({ jobs: [{ ...job, name: '字幕日更' }] }));
+  assert.deepEqual(
+    [nameOnly.pending[0]!.title, nameOnly.pending[0]!.message],
+    ['Hermes 定时任务失败 · 字幕日更', CRON_FALLBACK],
+  );
 });
 
 test('旧版固定文案的状态文件仍能读入', () => {

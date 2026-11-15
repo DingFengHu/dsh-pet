@@ -225,11 +225,25 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(result["decisions"][0]["title"], "等待中的会话")
         self.assertNotIn("text", result["decisions"][0])
 
+    def test_display_text_passes_hermes_redaction_or_is_dropped(self):
+        # Cron errors are raw str(e): the installed Hermes redactor runs before anything is shown.
+        secret = "sk-proj-" + "Ab3dEf6hIj9kLmN2pQr5tUv8" * 2
+        shown = helper.body("delivery failed: Authorization: Bearer " + secret)
+        self.assertTrue(shown.startswith("delivery failed"))
+        self.assertNotIn(secret, shown)
+        self.assertEqual(helper.body("来源被拦 **BLOCKED_SOURCE**"), "来源被拦 **BLOCKED_SOURCE**")
+        # No redactor (import fails, or it raises): no display text at all, bubbles stay generic.
+        with patch.dict(sys.modules, {"agent.redact": None}):
+            self.assertEqual(helper.body("来源被拦", "rm -rf build"), "")
+        import agent.redact
+        with patch.object(agent.redact, "redact_sensitive_text", side_effect=RuntimeError("DO_NOT_EXPORT")):
+            self.assertEqual(helper.body("来源被拦"), "")
+
     def test_display_text_is_bounded(self):
         self.assertEqual(helper.body(" a ", None, 7, "", "a", "b"), "a\nb")
         self.assertEqual(len(helper.body("字" * 5000)), helper.BODY_LIMIT)
         rows, _ = self.decision_read(approvals=[{"request_id": "big", "description": "述" * 5000, "command": "x"}])
-        self.assertEqual(rows[0]["text"], "述" * helper.BODY_LIMIT)
+        self.assertEqual(rows[0]["text"], "述" * (helper.BODY_LIMIT - 1) + "…")
         # The whole snapshot has a display-text budget: rows past it carry no text (the pet falls back
         # to generic wording) instead of overflowing the reader's 2 MiB stdout cap.
         endpoint = SimpleNamespace(api_origin="http://127.0.0.1:9120", instance_id="owner")
@@ -237,7 +251,8 @@ class SnapshotTests(unittest.TestCase):
         class Client:
             async def rpc(self, method, **params):
                 if method == "session.active_list":
-                    return {"sessions": [{"id": "s%d" % i, "status": "working"} for i in range(100)]}
+                    return {"sessions": [{"id": "s%d" % i, "status": "working",
+                                          **({"title": "题" * 500} if i >= 50 else {})} for i in range(100)]}
                 if method == "approval.pending":
                     return {"approvals": [{"request_id": "r%d" % i, "description": "述" * 600} for i in range(4)]}
                 if method == "session.events.since":
@@ -253,8 +268,10 @@ class SnapshotTests(unittest.TestCase):
              patch.object(helper, "native_get", return_value=[]):
             result = asyncio.run(helper.bounded_snapshot())
         self.assertEqual(len(result["decisions"]), 400)
+        # The first 50 sessions (no title) use the budget up exactly; later rows carry neither text nor title.
         self.assertEqual(sum(len(d.get("text", "")) for d in result["decisions"]), helper.BODY_BUDGET)
-        self.assertNotIn("text", result["decisions"][-1])
+        self.assertEqual(result["decisions"][199]["text"], "述" * 600)
+        self.assertEqual(set(result["decisions"][-1]), {"profile", "sessionId", "requestId", "method"})
         self.assertLess(len(json.dumps(result, ensure_ascii=True)), helper.MAX_BYTES)
 
     def test_unavailable_never_connects(self):
