@@ -124,9 +124,12 @@ function createTray({
       ? [
           { type: 'separator' },
           { label: '位置复原', click: () => recall.recall() },
-          recall.isHidden()
-            ? { label: '显示宠物', click: () => recall.show() }
-            : { label: '隐藏宠物', click: () => recall.hide() },
+          // 点击时按当时的真实状态切换，不按菜单文字：菜单刷新要向宿主读配置，读失败时文字会过期，
+          // 按文字走就会卡在「再隐藏一次」，切不回来。
+          {
+            label: recall.isHidden() ? '显示宠物' : '隐藏宠物',
+            click: () => (recall.isHidden() ? recall.show() : recall.hide()),
+          },
         ]
       : [];
     return Menu.buildFromTemplate([

@@ -228,6 +228,16 @@ describe('createTray —— 位置复原与隐藏/显示', () => {
     menu.find((item) => item.label === '显示宠物')?.click?.();
     assert.deepEqual(r.calls, ['show']);
   });
+
+  test('菜单文字过期（刷新失败）时，点击仍按真实状态切换', async () => {
+    const r = fakeRecall();
+    const { tray, menus } = harness({ appMode: true, pets: [{ label: 'a', id: 'a', display: 'both' }], recall: r.recall });
+    await tray.start();
+    const stale = lastMenu(menus).find((item) => item.label === '隐藏宠物');
+    r.state.hidden = true; // 已隐藏，但菜单没刷新，仍写着「隐藏宠物」
+    stale?.click?.();
+    assert.deepEqual(r.calls, ['show']);
+  });
 });
 
 describe('createTray —— 重建后刷新', () => {
