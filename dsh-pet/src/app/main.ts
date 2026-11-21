@@ -165,7 +165,8 @@ async function boot(): Promise<void> {
     delete process.env.DSH_PET_APP_TOKEN;
   }
 
-  app.on('second-instance', () => log('已有一个实例在运行，忽略本次启动'));
+  // 召回本身由 Helper 的 second-instance 监听完成（显示、置顶、回到初始位置），这里只记一笔
+  app.on('second-instance', () => log('已有一个实例在运行：召回宠物'));
   app.on('will-quit', () => {
     // 退出前把最后一批日志刷出去（定时器最多 1s，这里显式补一次）
     void logger.flush();
