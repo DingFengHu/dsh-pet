@@ -48,6 +48,7 @@ const { runSmokeCheck } = require('./main/smoke.js');
 const { createDpi } = require('./main/dpi.js');
 const { createBridge } = require('./main/bridge.js');
 const { createTray } = require('./main/tray.js');
+const { createRecall } = require('./main/recall.js');
 const { createWindows } = require('./main/windows.js');
 const { registerIpc } = require('./main/ipc.js');
 const { createUsageWindow } = require('./main/usage-window.js');
@@ -224,7 +225,13 @@ const petWindows = createWindows({
   topmostLevel,
   taskbarWatchdogEnabled: taskbarWatchdogEnabledFromEnv(process.env.DSH_PET_TASKBAR_WATCHDOG),
 });
-/** 托盘：显示开关与退出入口。 */
+/** 召回与隐藏：托盘两项菜单与再次双击桌面图标共用；状态变了刷新托盘文字。 */
+const recall = createRecall({
+  petWindows,
+  topmostLevel: topmostLevel(process.platform),
+  onChange: () => void tray.refresh(),
+});
+/** 托盘：显示开关、召回/隐藏与退出入口。 */
 const tray = createTray({
   app,
   Tray,
@@ -237,6 +244,14 @@ const tray = createTray({
   petRoute: PET_ROUTE,
   platform: TRAY_PLATFORM,
   helperDir: __dirname,
+  recall,
+});
+
+// 再次双击桌面图标：单实例锁把这次启动转成 second-instance 事件（只有独立应用持锁），
+// 已在运行时把宠物召回——显示、重新置顶、回到初始位置。
+app.on('second-instance', () => {
+  console.error('[dsh-pet-desktop-helper] second launch: recalling pets');
+  recall.recall();
 });
 
 /**
@@ -248,6 +263,7 @@ if (process.env.DSH_PET_IN_PROCESS === '1') {
   globalThis.__dshPetRebuildUi = async () => {
     petWindows.closeAll();
     petWindows.create();
+    recall.reset();
     await tray.refresh();
   };
 }

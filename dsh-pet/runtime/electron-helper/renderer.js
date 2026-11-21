@@ -143,6 +143,16 @@ if (window.petBridge && window.petBridge.onDisplays) {
   });
 }
 
+// 召回：主进程已把窗口显示并钉回置顶带，这里停掉漫游/飞行，回到配置角落。
+// 正被拖着的那只不动：用户手上的操作优先，松手后它自己落定。
+if (window.petBridge && window.petBridge.onGoHome) {
+  window.petBridge.onGoHome(() => {
+    for (const s of sprites) {
+      if (!s.dragState.active) s.goHome();
+    }
+  });
+}
+
 // 窗口内容区尺寸异常时按当前位置重新规整。
 // 守卫：拖拽/飞行/漫游中绝不重设位置——这三种状态下位置由输入或物理驱动，而 position() 会把
 // 宠物拉回 customPos。跨屏时 Windows 会因 WM_DPICHANGED 主动改窗口尺寸，不设防就会看到宠物跳回上一个落点。

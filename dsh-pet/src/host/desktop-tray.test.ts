@@ -34,6 +34,7 @@ function harness(options: {
   isBridge?: boolean;
   canQuit?: boolean;
   pets?: Array<Record<string, unknown>>;
+  recall?: Record<string, unknown>;
 }) {
   const requests: string[] = [];
   const bodies: string[] = [];
@@ -74,6 +75,7 @@ function harness(options: {
     petRoute: '/dsh-pet-7340',
     platform: { templateImage: false, leftClickPopsMenu: false },
     helperDir: '.',
+    recall: options.recall,
   };
 
   const tray = createTray(deps);
@@ -169,6 +171,72 @@ describe('createTray —— 退出项的分支', () => {
       lastMenu(menus).some((item) => item.label === '退出'),
       false,
     );
+  });
+});
+
+describe('createTray —— 位置复原与隐藏/显示', () => {
+  /** 假召回能力：记录调用，hidden 可由测试改。 */
+  function fakeRecall() {
+    const calls: string[] = [];
+    const state = { hidden: false };
+    return {
+      calls,
+      state,
+      recall: {
+        isHidden: () => state.hidden,
+        recall: () => calls.push('recall'),
+        hide: () => calls.push('hide'),
+        show: () => calls.push('show'),
+      },
+    };
+  }
+
+  test('没注入 recall：菜单与原来一样，没有这两项', async () => {
+    const { tray, menus } = harness({ appMode: true, pets: [{ label: 'a', id: 'a', display: 'both' }] });
+    await tray.start();
+    const labels = lastMenu(menus).map((item) => item.label);
+    assert.equal(labels.includes('位置复原'), false);
+    assert.equal(labels.includes('隐藏宠物'), false);
+  });
+
+  test('显示中：有「位置复原」和「隐藏宠物」，点了分别调 recall / hide，且排在退出之前', async () => {
+    const r = fakeRecall();
+    const { tray, menus } = harness({ appMode: true, pets: [{ label: 'a', id: 'a', display: 'both' }], recall: r.recall });
+    await tray.start();
+    const menu = lastMenu(menus);
+    const labels = menu.map((item) => item.label);
+    assert.ok(labels.indexOf('位置复原') < labels.indexOf('退出'));
+    menu.find((item) => item.label === '位置复原')?.click?.();
+    menu.find((item) => item.label === '隐藏宠物')?.click?.();
+    assert.deepEqual(r.calls, ['recall', 'hide']);
+    assert.equal(labels.includes('显示宠物'), false);
+    // 新增两项都是普通项：宠物勾选项的数量不变
+    assert.equal(menu.filter((item) => item.type === 'checkbox').length, 1);
+  });
+
+  test('隐藏中：刷新后变成「显示宠物」，点了调 show', async () => {
+    const r = fakeRecall();
+    const { tray, menus } = harness({ appMode: true, pets: [{ label: 'a', id: 'a', display: 'both' }], recall: r.recall });
+    await tray.start();
+    r.state.hidden = true;
+    await tray.refresh();
+    const menu = lastMenu(menus);
+    assert.equal(
+      menu.some((item) => item.label === '隐藏宠物'),
+      false,
+    );
+    menu.find((item) => item.label === '显示宠物')?.click?.();
+    assert.deepEqual(r.calls, ['show']);
+  });
+
+  test('菜单文字过期（刷新失败）时，点击仍按真实状态切换', async () => {
+    const r = fakeRecall();
+    const { tray, menus } = harness({ appMode: true, pets: [{ label: 'a', id: 'a', display: 'both' }], recall: r.recall });
+    await tray.start();
+    const stale = lastMenu(menus).find((item) => item.label === '隐藏宠物');
+    r.state.hidden = true; // 已隐藏，但菜单没刷新，仍写着「隐藏宠物」
+    stale?.click?.();
+    assert.deepEqual(r.calls, ['show']);
   });
 });
 

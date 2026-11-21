@@ -94,4 +94,8 @@ contextBridge.exposeInMainWorld('petBridge', {
   onDisplays(cb) {
     ipcRenderer.on('pet:displays', (e, geo) => cb(geo));
   },
+  // 召回（托盘「位置复原」/ 再次双击图标）：主进程已显示并置顶窗口，渲染端回到初始位置。
+  onGoHome(cb) {
+    ipcRenderer.on('pet:go-home', () => cb());
+  },
 });

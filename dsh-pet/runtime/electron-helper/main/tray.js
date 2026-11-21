@@ -1,6 +1,6 @@
 'use strict';
 /**
- * 系统托盘：桌面模式的显示开关与「退出」入口。
+ * 系统托盘：桌面模式的显示开关、「位置复原」「隐藏/显示宠物」与「退出」入口。
  *
  * 托盘是桌面模式唯一不进浏览器的入口——某只宠物改成 web/none 后窗口与右键菜单一起消失，
  * 只有托盘还能把它切回来。菜单是静态的：切换 display 后宿主会重启本进程，新进程按新配置重建。
@@ -23,6 +23,7 @@ const path = require('node:path');
  * @param deps.petRoute - 宠物路由前缀。
  * @param deps.platform - 托盘平台差异（tray-platform.js 的判定结果）。
  * @param deps.helperDir - runtime/electron-helper 的绝对目录（图标在包的 assets/ 下）。
+ * @param deps.recall - 召回能力（main/recall.js），可选；给了就多出「位置复原」与「隐藏/显示宠物」两项。
  */
 function createTray({
   app,
@@ -36,6 +37,7 @@ function createTray({
   petRoute,
   platform,
   helperDir,
+  recall,
 }) {
   const isDesktopDisplay = (display) => display === 'desktop' || display === 'both';
 
@@ -117,6 +119,19 @@ function createTray({
         console.error('[dsh-pet-desktop-helper] tray quit failed:', String(e && e.message ? e.message : e));
       });
     };
+    // 召回与隐藏（recall 由 main.js 注入）：只在本次运行内生效，不写配置
+    const recallItems = recall
+      ? [
+          { type: 'separator' },
+          { label: '位置复原', click: () => recall.recall() },
+          // 点击时按当时的真实状态切换，不按菜单文字：菜单刷新要向宿主读配置，读失败时文字会过期，
+          // 按文字走就会卡在「再隐藏一次」，切不回来。
+          {
+            label: recall.isHidden() ? '显示宠物' : '隐藏宠物',
+            click: () => (recall.isHidden() ? recall.show() : recall.hide()),
+          },
+        ]
+      : [];
     return Menu.buildFromTemplate([
       ...pets.map((pet) => ({
         label: pet.name || pet.id,
@@ -124,6 +139,7 @@ function createTray({
         checked: isDesktopDisplay(pet.display),
         click: () => traySetPetDisplay(pet.id, toggleDisplay(pet.display)),
       })),
+      ...recallItems,
       ...(canQuit ? [{ type: 'separator' }, { label: '退出', click: quitApp }] : []),
     ]);
   }
