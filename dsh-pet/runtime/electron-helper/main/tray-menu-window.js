@@ -138,8 +138,15 @@ function createTrayMenuWindow({ BrowserWindow, screen, helperDir, zoom = () => 1
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
     });
     win = w;
-    // 比任务栏更高的一档，铺满时才接得住点在任务栏上的那一下
+    // Windows 上各置顶层级都只是 HWND_TOPMOST；它最后一个置顶，所以压在任务栏上面，接得住点在任务栏的那一下
     w.setAlwaysOnTop(true, 'pop-up-menu');
+    // 页面进程没了就收不到「点到面板外」，整屏会被一个透明窗口盖住：立即关掉
+    w.webContents.on('render-process-gone', () => {
+      if (win === w) close();
+    });
+    w.webContents.on('unresponsive', () => {
+      if (win === w) close();
+    });
     w.webContents.on('did-finish-load', () => {
       if (w.isDestroyed()) return;
       w.webContents.setZoomFactor(z);
