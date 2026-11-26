@@ -2,23 +2,24 @@
 /**
  * 托盘右键菜单窗口（Windows）：替代 Electron 自带的托盘菜单。
  *
- * 原因：应用把 Chromium 的设备缩放强制成 1（宠物定位需要，见 DPI 线性化），Electron 的托盘菜单由 Chromium
- * 自己绘制，于是也按 1 倍画在 1.75 倍的屏上，字小得看不清；菜单 API 又不能单独调字号。
- * 这里用一个小透明窗口画菜单，按宠物缩放设 zoomFactor（同用量面板）。每次弹出都新建窗口：
- * 透明窗口首帧前改尺寸会整窗不绘制。点到别处（失焦）、按 Esc 或点了某项就关。
+ * 原因：应用把 Chromium 的设备缩放强制成 1（宠物定位需要，见 DPI 线性化；改成主屏缩放会让混合缩放的
+ * 多屏坐标失去线性，2026-11-26 实测），Electron 的托盘菜单由 Chromium 绘制，也按 1 倍画在 1.75 倍的屏上，
+ * 字小得看不清；菜单 API 又不能单独调字号。所以这里自己画，按宠物缩放设 zoomFactor（同用量面板）。
+ *
+ * 关闭不依赖焦点：Windows 常常不把前台焦点给这个弹窗，只靠 blur 会出现「点别处不关」。窗口铺满光标
+ * 所在屏（含任务栏），背景几乎全透明但能接住点击，菜单面板画在光标处；点到面板外任何位置就关
+ * （和系统菜单一样，这一下点击被菜单吃掉）。拿到焦点时 Esc、切走（blur）也关；点了某项先关再执行。
+ * 每次弹出都新建窗口：透明窗口首帧前改尺寸会整窗不绘制。
  * @module dsh-pet/runtime/electron-helper/main/tray-menu-window
  */
 const path = require('node:path');
 
 /** 尺寸（CSS px）：与 tray-menu.html 的样式一一对应。 */
-const MENU_W = 240;
-const ITEM_H = 32;
+const MENU_W = 200;
+const ITEM_H = 28;
 const SEP_H = 9;
 /** 外边距 6×2 + 内边距 4×2 + 边框 1×2。 */
 const CHROME_H = 22;
-/** 失焦兜底的轮询间隔与「一直没碰」的自动关闭时长（ms）。 */
-const WATCH_TICK_MS = 200;
-const UNFOCUSED_TIMEOUT_MS = 8000;
 
 /**
  * 把 Electron 菜单模板压成页面要的纯数据（去掉 click 等函数）。
@@ -35,7 +36,7 @@ function toPageItems(template) {
 }
 
 /**
- * 菜单窗口的 CSS 高度。
+ * 菜单面板的 CSS 高度。
  *
  * @param template - 菜单模板。
  */
@@ -44,12 +45,12 @@ function menuHeight(template) {
 }
 
 /**
- * 弹在光标处：托盘在屏幕底部，默认往光标左上方展开；放不下就翻到另一侧，最后钳进工作区。
+ * 面板摆在光标处：托盘在屏幕底部，默认往光标左上方展开；放不下就翻到另一侧，最后钳进工作区。
  *
  * @param cursor - 光标屏幕坐标。
  * @param area - 光标所在屏的工作区。
- * @param size - 窗口尺寸（物理像素）。
- * @returns 窗口矩形。
+ * @param size - 面板尺寸（物理像素）。
+ * @returns 面板矩形（屏幕坐标）。
  */
 function placeMenu(cursor, area, size) {
   const w = Math.min(size.width, area.width);
@@ -61,6 +62,27 @@ function placeMenu(cursor, area, size) {
   x = Math.max(area.x, Math.min(x, area.x + area.width - w));
   y = Math.max(area.y, Math.min(y, area.y + area.height - h));
   return { x: Math.round(x), y: Math.round(y), width: Math.round(w), height: Math.round(h) };
+}
+
+/**
+ * 整个弹窗的布局：窗口 = 光标所在屏的完整范围（含任务栏），面板在窗口内的 CSS 坐标。
+ *
+ * @param cursor - 光标屏幕坐标。
+ * @param display - 光标所在屏（bounds 与 workArea，物理像素）。
+ * @param template - 菜单模板。
+ * @param zoom - 页面缩放。
+ * @returns 窗口矩形与面板 CSS 左上角。
+ */
+function layoutMenu(cursor, display, template, zoom) {
+  const panel = placeMenu(cursor, display.workArea, {
+    width: Math.round(MENU_W * zoom),
+    height: Math.round(menuHeight(template) * zoom),
+  });
+  const b = display.bounds;
+  return {
+    window: { x: b.x, y: b.y, width: b.width, height: b.height },
+    panel: { left: Math.round((panel.x - b.x) / zoom), top: Math.round((panel.y - b.y) / zoom) },
+  };
 }
 
 /**
@@ -81,37 +103,10 @@ function createTrayMenuWindow({ BrowserWindow, screen, helperDir, zoom = () => 1
     return Number.isFinite(z) && z >= 0.5 && z <= 4 ? z : 1;
   }
 
-  /** 没拿到焦点时的兜底轮询（见 watchUnfocused）。 */
-  let watchTimer = null;
-
   function close() {
-    if (watchTimer) clearInterval(watchTimer);
-    watchTimer = null;
     const w = win;
     win = null;
     if (w && !w.isDestroyed()) w.destroy();
-  }
-
-  /**
-   * 失焦兜底：Windows 可能不给弹窗前台焦点（右键后用户又动了别的窗口），那样 blur 永远不来。
-   * 拿不到焦点期间：鼠标进过菜单再离开就关；一直没碰过，超过 UNFOCUSED_TIMEOUT_MS 也关。拿到焦点后交给 blur。
-   */
-  function watchUnfocused(w) {
-    const started = Date.now();
-    let hovered = false;
-    watchTimer = setInterval(() => {
-      if (win !== w || w.isDestroyed()) return close();
-      if (w.isFocused()) {
-        clearInterval(watchTimer);
-        watchTimer = null;
-        return;
-      }
-      const c = screen.getCursorScreenPoint();
-      const b = w.getBounds();
-      const inside = c.x >= b.x && c.x < b.x + b.width && c.y >= b.y && c.y < b.y + b.height;
-      if (inside) hovered = true;
-      else if (hovered || Date.now() - started > UNFOCUSED_TIMEOUT_MS) close();
-    }, WATCH_TICK_MS);
   }
 
   /**
@@ -123,40 +118,51 @@ function createTrayMenuWindow({ BrowserWindow, screen, helperDir, zoom = () => 1
     close();
     const z = currentZoom();
     const cursor = screen.getCursorScreenPoint();
-    const area = screen.getDisplayNearestPoint(cursor).workArea;
-    const bounds = placeMenu(cursor, area, {
-      width: Math.round(MENU_W * z),
-      height: Math.round(menuHeight(template) * z),
-    });
+    const layout = layoutMenu(cursor, screen.getDisplayNearestPoint(cursor), template, z);
     const w = new BrowserWindow({
-      ...bounds,
+      ...layout.window,
       show: false,
       backgroundColor: '#00000000',
       frame: false,
       transparent: true,
       resizable: false,
+      movable: false,
       skipTaskbar: true,
       alwaysOnTop: true,
       hasShadow: false,
       fullscreenable: false,
       maximizable: false,
       minimizable: false,
+      enableLargerThanScreen: true,
       title: 'tray-menu',
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
     });
     win = w;
+    // Windows 上各置顶层级都只是 HWND_TOPMOST；它最后一个置顶，所以压在任务栏上面，接得住点在任务栏的那一下
     w.setAlwaysOnTop(true, 'pop-up-menu');
+    // 页面进程没了就收不到「点到面板外」，整屏会被一个透明窗口盖住：立即关掉
+    w.webContents.on('render-process-gone', () => {
+      if (win === w) close();
+    });
+    w.webContents.on('unresponsive', () => {
+      if (win === w) close();
+    });
     w.webContents.on('did-finish-load', () => {
       if (w.isDestroyed()) return;
       w.webContents.setZoomFactor(z);
       w.show();
       w.focus();
       w.webContents.focus();
-      watchUnfocused(w);
     });
-    // 点击上报：title 形如 tray-menu:pick:<序号>，拦下来执行模板里的 click
+    // 页面上报：tray-menu:pick:<序号> 执行该项；tray-menu:dismiss 是点到了面板外
     w.on('page-title-updated', (event, title) => {
-      const m = /^tray-menu:pick:(\d{1,3})$/.exec(String(title));
+      const text = String(title);
+      if (text === 'tray-menu:dismiss') {
+        event.preventDefault();
+        close();
+        return;
+      }
+      const m = /^tray-menu:pick:(\d{1,3})$/.exec(text);
       if (!m) return;
       event.preventDefault();
       const item = template[Number(m[1])];
@@ -181,14 +187,21 @@ function createTrayMenuWindow({ BrowserWindow, screen, helperDir, zoom = () => 1
     w.webContents.on('will-navigate', (event) => event.preventDefault());
     w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     w.loadFile(path.join(helperDir, 'tray-menu.html'), {
-      query: { items: JSON.stringify(toPageItems(template)) },
+      query: {
+        items: JSON.stringify(toPageItems(template)),
+        left: String(layout.panel.left),
+        top: String(layout.panel.top),
+      },
     }).catch((error) => {
-      console.error('[dsh-pet-desktop-helper] tray menu load failed:', error && error.message);
-      if (win === w) close();
+      // 连点右键时旧窗口在加载中被新的一次关掉，这里会报 ERR_ABORTED/ERR_FAILED，属正常
+      if (win === w) {
+        console.error('[dsh-pet-desktop-helper] tray menu load failed:', error && error.message);
+        close();
+      }
     });
   }
 
   return { show, close };
 }
 
-module.exports = { createTrayMenuWindow, placeMenu, menuHeight, toPageItems };
+module.exports = { createTrayMenuWindow, placeMenu, menuHeight, toPageItems, layoutMenu };
