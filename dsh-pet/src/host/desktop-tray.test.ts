@@ -35,7 +35,9 @@ function harness(options: {
   canQuit?: boolean;
   pets?: Array<Record<string, unknown>>;
   recall?: Record<string, unknown>;
+  popupMenu?: Record<string, unknown>;
 }) {
+  const handlers: Record<string, () => void> = {};
   const requests: string[] = [];
   const bodies: string[] = [];
   const quits: string[] = [];
@@ -46,7 +48,9 @@ function harness(options: {
     setContextMenu(menu: unknown): void {
       menus.push((menu as { template: MenuItem[] }).template);
     }
-    on(): void {}
+    on(event: string, handler: () => void): void {
+      handlers[event] = handler;
+    }
     popUpContextMenu(): void {}
     destroy(): void {}
   }
@@ -76,10 +80,11 @@ function harness(options: {
     platform: { templateImage: false, leftClickPopsMenu: false },
     helperDir: '.',
     recall: options.recall,
+    popupMenu: options.popupMenu,
   };
 
   const tray = createTray(deps);
-  return { tray, requests, bodies, quits, menus };
+  return { tray, requests, bodies, quits, menus, handlers };
 }
 
 /** 取最后一次构建出来的菜单模板。 */
@@ -237,6 +242,32 @@ describe('createTray —— 位置复原与隐藏/显示', () => {
     r.state.hidden = true; // 已隐藏，但菜单没刷新，仍写着「隐藏宠物」
     stale?.click?.();
     assert.deepEqual(r.calls, ['show']);
+  });
+});
+
+describe('createTray —— 自绘菜单（Windows 高 DPI 字号）', () => {
+  test('注入 popupMenu：不挂 Electron 菜单，右键现读配置弹自绘菜单，点击照常生效', async () => {
+    const shown: MenuItem[][] = [];
+    const pets: Array<Record<string, unknown>> = [{ label: 'a', id: 'a', display: 'both' }];
+    const { tray, menus, handlers, quits } = harness({
+      appMode: true,
+      pets,
+      popupMenu: { show: (template: MenuItem[]) => shown.push(template) },
+    });
+    await tray.start();
+    assert.equal(menus.length, 0, '不得再 setContextMenu（那份菜单按 1 倍缩放绘制，字太小）');
+    assert.ok(handlers['right-click'], '必须自己接管右键');
+    pets[0] = { label: 'a', id: 'a', display: 'web' };
+    handlers['right-click']();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    const template = shown[shown.length - 1];
+    assert.ok(template, '右键应弹出自绘菜单');
+    assert.equal(template[0].checked, false, '每次右键现读配置，勾选是当下的');
+    template.find((item) => item.label === '退出')?.click?.();
+    assert.deepEqual(quits, ['app.quit']);
+    await tray.refresh();
+    assert.equal(menus.length, 0, 'refresh 也不得挂回 Electron 菜单');
   });
 });
 

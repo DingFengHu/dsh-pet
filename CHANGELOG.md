@@ -1,5 +1,12 @@
 # 定制变更记录
 
+## 2026-11-26 托盘右键菜单字太小：Windows 改用自绘菜单（0.4.3-dfh.26）
+
+- 现象：高 DPI 屏（主屏 175%）上，右下角托盘图标的右键菜单字小得看不清。
+- 原因：应用为了宠物定位把 Chromium 的设备缩放强制成 1（`--force-device-scale-factor=1`）。Windows 上 Electron 的托盘菜单由 Chromium 自己绘制，也按 1 倍画；菜单 API 不能单独调字号。
+- 改动：Windows 上托盘右键改弹自绘菜单（`runtime/electron-helper/main/tray-menu-window.js` + `tray-menu.html`），按宠物缩放（同用量面板）放大，14px 字号 × 1.75；跟随系统深浅色；点到别处、按 Esc 或点了某项就关，上下键 + 回车可选。每次右键现读配置，勾选和「隐藏/显示宠物」文字都是当下的。
+- 不变：菜单项和行为与原来一致；macOS / Linux 仍用 Electron 原生菜单。
+
 ## 2026-11-21 托盘加「位置复原」「隐藏/显示宠物」，再次双击图标召回（0.4.3-dfh.25）
 
 - 现象：2026-11-21 大肥鱼又“不见了”。这次没出屏：窗口还带着置顶标记，但在 Z 序里沉到了 moomoo、Discord、Claude 下面，被盖住。上游因为会打断全屏游戏和截图，默认关掉了定时重新置顶的看门狗（`TOPMOST_WATCHDOG_ENABLED = false`），沉底后没有自动恢复的路。

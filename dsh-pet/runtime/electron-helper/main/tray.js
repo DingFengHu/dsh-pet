@@ -24,6 +24,7 @@ const path = require('node:path');
  * @param deps.platform - 托盘平台差异（tray-platform.js 的判定结果）。
  * @param deps.helperDir - runtime/electron-helper 的绝对目录（图标在包的 assets/ 下）。
  * @param deps.recall - 召回能力（main/recall.js），可选；给了就多出「位置复原」与「隐藏/显示宠物」两项。
+ * @param deps.popupMenu - 自绘菜单（main/tray-menu-window.js），可选；给了就不用 Electron 菜单，右键改弹它。
  */
 function createTray({
   app,
@@ -38,6 +39,7 @@ function createTray({
   platform,
   helperDir,
   recall,
+  popupMenu,
 }) {
   const isDesktopDisplay = (display) => display === 'desktop' || display === 'both';
 
@@ -92,6 +94,12 @@ function createTray({
    * 勾选状态得靠这里重读一次刷新，否则菜单和配置对不上。
    */
   async function buildMenu() {
+    const template = await buildTemplate();
+    return template === null ? null : Menu.buildFromTemplate(template);
+  }
+
+  /** 菜单模板（buildMenu 与自绘菜单 popupMenu 共用）；null 同 buildMenu。 */
+  async function buildTemplate() {
     const resp = await hostRequest('GET', petRoute + '/config');
     const merged = JSON.parse(resp.body || '{}');
     // 托盘开关（main 条目的 trayEnabled）：只有显式 false 才不建，缺失或写坏时保持建，
@@ -132,7 +140,7 @@ function createTray({
           },
         ]
       : [];
-    return Menu.buildFromTemplate([
+    return [
       ...pets.map((pet) => ({
         label: pet.name || pet.id,
         type: 'checkbox',
@@ -141,7 +149,17 @@ function createTray({
       })),
       ...recallItems,
       ...(canQuit ? [{ type: 'separator' }, { label: '退出', click: quitApp }] : []),
-    ]);
+    ];
+  }
+
+  /** 自绘菜单：每次右键现读配置拼模板再弹出，文字与勾选永远是当下的。 */
+  async function popUpOwnMenu() {
+    try {
+      const template = await buildTemplate();
+      if (template !== null) popupMenu.show(template);
+    } catch (e) {
+      console.error('[dsh-pet-desktop-helper] tray menu build failed:', String(e && e.message ? e.message : e));
+    }
   }
 
   /**
@@ -158,6 +176,11 @@ function createTray({
       if (menu === null) return;
       tray = new Tray(trayIcon());
       tray.setToolTip('dsh-pet 桌面宠物');
+      if (popupMenu) {
+        // 自绘菜单（Windows）：不挂 Electron 菜单，右键自己弹；字号随宠物缩放，见 tray-menu-window.js
+        tray.on('right-click', () => void popUpOwnMenu());
+        return;
+      }
       tray.setContextMenu(menu);
       // Windows 上 setContextMenu 只接管右键，左键默认什么都不做（macOS 相反：左键即弹菜单）
       if (platform.leftClickPopsMenu) tray.on('click', () => tray.popUpContextMenu());
@@ -168,7 +191,7 @@ function createTray({
 
   /** 重读配置并刷新菜单勾选；没建托盘时什么都不做（应用模式重建窗口后调用）。 */
   async function refreshTray() {
-    if (!tray) return;
+    if (!tray || popupMenu) return; // 自绘菜单每次右键现拼，无需刷新
     try {
       const menu = await buildMenu();
       if (menu !== null) tray.setContextMenu(menu);
