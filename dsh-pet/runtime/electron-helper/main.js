@@ -49,6 +49,7 @@ const { createDpi } = require('./main/dpi.js');
 const { createBridge } = require('./main/bridge.js');
 const { createTray } = require('./main/tray.js');
 const { createRecall } = require('./main/recall.js');
+const { createTrayMenuWindow } = require('./main/tray-menu-window.js');
 const { createWindows } = require('./main/windows.js');
 const { registerIpc } = require('./main/ipc.js');
 const { createUsageWindow } = require('./main/usage-window.js');
@@ -245,6 +246,11 @@ const tray = createTray({
   platform: TRAY_PLATFORM,
   helperDir: __dirname,
   recall,
+  // Windows：Electron 托盘菜单按强制的设备缩放 1 绘制，高 DPI 屏上字太小，改用自绘菜单（按宠物缩放）
+  popupMenu:
+    process.platform === 'win32'
+      ? createTrayMenuWindow({ BrowserWindow, screen, helperDir: __dirname, zoom: () => dpi.petScale() })
+      : undefined,
 });
 
 // 再次双击桌面图标：单实例锁把这次启动转成 second-instance 事件（只有独立应用持锁），
