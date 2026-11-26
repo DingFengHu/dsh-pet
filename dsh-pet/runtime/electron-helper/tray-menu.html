@@ -7,7 +7,8 @@
     <!--
       托盘右键菜单（Windows）：Electron 自带菜单按强制的设备缩放 1 绘制，在高 DPI 屏上字太小，
       所以改由这个页面绘制，主进程按宠物缩放设 zoomFactor。尺寸常量与 main/tray-menu-window.js 一致。
-      菜单项经 URL 参数 items 传入；点击经 document.title「tray-menu:pick:<序号>」上报（页面无 Node 能力）。
+      页面铺满整块屏，面板画在 URL 参数 left/top 处；菜单项经 items 传入。点击经 document.title 上报（页面无 Node 能力）：
+      「tray-menu:pick:<序号>」= 选了某项，「tray-menu:dismiss」= 点到了面板外。
     -->
     <style>
       :root {
@@ -31,12 +32,19 @@
       html,
       body {
         margin: 0;
-        background: transparent;
+        width: 100%;
+        height: 100%;
+        /* 几乎全透明但不为 0：整屏都能接住点击，点到面板外即关闭（见 main/tray-menu-window.js） */
+        background: rgba(0, 0, 0, 0.004);
         overflow: hidden;
         user-select: none;
         font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
-        font-size: 14px;
+        font-size: 12px;
         color: var(--fg);
+      }
+      .wrap {
+        position: absolute;
+        width: 200px;
       }
       .menu {
         box-sizing: border-box;
@@ -50,7 +58,7 @@
       .item {
         display: flex;
         align-items: center;
-        height: 32px;
+        height: 28px;
         padding: 0 14px 0 6px;
         border-radius: 5px;
         cursor: default;
@@ -80,16 +88,24 @@
     </style>
   </head>
   <body>
-    <div class="menu" id="menu" role="menu"></div>
+    <div class="wrap" id="wrap"><div class="menu" id="menu" role="menu"></div></div>
     <script>
       (function () {
+        var params = new URLSearchParams(location.search);
         var items = [];
         try {
-          items = JSON.parse(new URLSearchParams(location.search).get('items') || '[]');
+          items = JSON.parse(params.get('items') || '[]');
         } catch (e) {
           items = [];
         }
+        var wrap = document.getElementById('wrap');
+        wrap.style.left = (Number(params.get('left')) || 0) + 'px';
+        wrap.style.top = (Number(params.get('top')) || 0) + 'px';
         var menu = document.getElementById('menu');
+        // 点到面板外（左键、右键、中键都算）= 关闭，和系统菜单一样
+        document.addEventListener('mousedown', function (e) {
+          if (!menu.contains(e.target)) document.title = 'tray-menu:dismiss';
+        });
         var rows = [];
         items.forEach(function (item, i) {
           if (item.separator) {
