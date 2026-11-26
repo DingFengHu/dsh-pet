@@ -16,6 +16,9 @@ const ITEM_H = 32;
 const SEP_H = 9;
 /** 外边距 6×2 + 内边距 4×2 + 边框 1×2。 */
 const CHROME_H = 22;
+/** 失焦兜底的轮询间隔与「一直没碰」的自动关闭时长（ms）。 */
+const WATCH_TICK_MS = 200;
+const UNFOCUSED_TIMEOUT_MS = 8000;
 
 /**
  * 把 Electron 菜单模板压成页面要的纯数据（去掉 click 等函数）。
@@ -78,10 +81,37 @@ function createTrayMenuWindow({ BrowserWindow, screen, helperDir, zoom = () => 1
     return Number.isFinite(z) && z >= 0.5 && z <= 4 ? z : 1;
   }
 
+  /** 没拿到焦点时的兜底轮询（见 watchUnfocused）。 */
+  let watchTimer = null;
+
   function close() {
+    if (watchTimer) clearInterval(watchTimer);
+    watchTimer = null;
     const w = win;
     win = null;
     if (w && !w.isDestroyed()) w.destroy();
+  }
+
+  /**
+   * 失焦兜底：Windows 可能不给弹窗前台焦点（右键后用户又动了别的窗口），那样 blur 永远不来。
+   * 拿不到焦点期间：鼠标进过菜单再离开就关；一直没碰过，超过 UNFOCUSED_TIMEOUT_MS 也关。拿到焦点后交给 blur。
+   */
+  function watchUnfocused(w) {
+    const started = Date.now();
+    let hovered = false;
+    watchTimer = setInterval(() => {
+      if (win !== w || w.isDestroyed()) return close();
+      if (w.isFocused()) {
+        clearInterval(watchTimer);
+        watchTimer = null;
+        return;
+      }
+      const c = screen.getCursorScreenPoint();
+      const b = w.getBounds();
+      const inside = c.x >= b.x && c.x < b.x + b.width && c.y >= b.y && c.y < b.y + b.height;
+      if (inside) hovered = true;
+      else if (hovered || Date.now() - started > UNFOCUSED_TIMEOUT_MS) close();
+    }, WATCH_TICK_MS);
   }
 
   /**
@@ -122,6 +152,7 @@ function createTrayMenuWindow({ BrowserWindow, screen, helperDir, zoom = () => 1
       w.show();
       w.focus();
       w.webContents.focus();
+      watchUnfocused(w);
     });
     // 点击上报：title 形如 tray-menu:pick:<序号>，拦下来执行模板里的 click
     w.on('page-title-updated', (event, title) => {

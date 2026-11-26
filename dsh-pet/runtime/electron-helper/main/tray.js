@@ -205,6 +205,7 @@ function createTray({
     refresh: refreshTray,
     exists: () => tray !== null,
     destroy() {
+      if (popupMenu && typeof popupMenu.close === 'function') popupMenu.close(); // 开着的自绘菜单一起关
       if (!tray) return;
       try {
         tray.destroy();
